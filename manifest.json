@@ -1,0 +1,95 @@
+{
+  "manifest_version": 3,
+  "name": "Chess Sensei — Smart Assistant",
+  "version": "1.3.0",
+  "description": "Шахматный ассистент с человеческими профилями, планами игры, адаптивной силой и задержкой по часам.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Настройки Chess Sensei",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "*://*.chess.com/*",
+    "*://*.lichess.org/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background/service_worker.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.chess.com/*",
+        "*://*.lichess.org/*",
+        "file://*/*test_board.html*",
+        "http://*/*test_board.html*",
+        "http://localhost:*/*",
+        "http://127.0.0.1:*/*"
+      ],
+      "css": [
+        "content/styles.css"
+      ],
+      "js": [
+        "vendor/chess.js",
+        "engine/position_state.js",
+        "engine/uci_engine.js",
+        "engine/browser_engine.js",
+        "engine/openings_data.js",
+        "engine/openings_book.js",
+        "engine/personas.js",
+        "engine/move_selector.js",
+        "engine/player_profile.js",
+        "engine/rated_profile.js",
+        "engine/position_complexity.js",
+        "engine/plan_tracker.js",
+        "engine/human_selector.js",
+        "engine/strength_adapter.js",
+        "engine/game_session.js",
+        "engine/engine_controller.js",
+        "content/time_manager.js",
+        "content/board_detector.js",
+        "content/game_context.js",
+        "content/visual_overlay.js",
+        "content/hud_widget.js",
+        "content/move_executor.js",
+        "content/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "engine/stockfish.js",
+        "engine/openings_data.json",
+        "offscreen/*",
+        "icons/*",
+        "test/*",
+        "vendor/*",
+        "engine/uci_engine.js",
+        "engine/browser_engine.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

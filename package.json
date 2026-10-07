@@ -1,0 +1,15 @@
+{
+  "name": "chess-sensei",
+  "version": "1.3.0",
+  "private": true,
+  "description": "Chess training extension with rating-limited Stockfish profiles",
+  "scripts": {
+    "test": "node test/run_tests.js && node test/regression_tests.js && node test/human_tests.js && node test/rated_tests.js && node test/timing_tests.js",
+    "test:browser": "node test/browser_tests.js",
+    "test:bridge": "python test/test_bridge.py",
+    "test:matches": "node test/rated_match_tests.js"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

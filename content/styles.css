@@ -1,0 +1,492 @@
+/* Chess Sensei - High-End Dark Glassmorphism Theme */
+
+.cs-hud-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 290px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 245, 155, 0.12);
+  color: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  z-index: 999999;
+  user-select: none;
+  transition: width 0.2s ease, transform 0.15s ease;
+  overflow: hidden;
+}
+
+.cs-hud-container.cs-minimized {
+  width: 180px;
+}
+.cs-hud-container.cs-minimized .cs-hud-body {
+  display: none;
+}
+
+/* Header */
+.cs-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: grab;
+}
+.cs-hud-header:active {
+  cursor: grabbing;
+}
+
+.cs-hud-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  color: #e2e8f0;
+}
+.cs-hud-icon {
+  font-size: 15px;
+}
+
+.cs-hud-actions {
+  display: flex;
+  gap: 6px;
+}
+.cs-btn-icon {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.cs-btn-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Body */
+.cs-hud-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Color Selector */
+.cs-color-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cs-section-label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.cs-color-buttons {
+  display: flex;
+  gap: 4px;
+}
+.cs-color-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cs-color-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+}
+.cs-color-btn.active {
+  background: rgba(0, 194, 255, 0.2);
+  border-color: #00c2ff;
+  color: #00c2ff;
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(0, 194, 255, 0.3);
+}
+
+/* Move Box */
+.cs-move-section {
+  background: rgba(2, 6, 23, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.cs-move-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cs-move-badge {
+  font-size: 19px;
+  font-weight: 800;
+  color: #00f59b;
+  letter-spacing: 1px;
+  text-shadow: 0 0 12px rgba(0, 245, 155, 0.4);
+}
+.cs-rank-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  text-transform: uppercase;
+}
+.cs-rank-pill.rank-1 {
+  background: rgba(0, 245, 155, 0.18);
+  color: #00f59b;
+  border: 1px solid rgba(0, 245, 155, 0.4);
+}
+.cs-rank-pill.rank-2 {
+  background: rgba(0, 194, 255, 0.18);
+  color: #00c2ff;
+  border: 1px solid rgba(0, 194, 255, 0.4);
+}
+.cs-rank-pill.rank-3 {
+  background: rgba(255, 184, 0, 0.18);
+  color: #ffb800;
+  border: 1px solid rgba(255, 184, 0, 0.4);
+}
+.cs-rank-pill.rank-book {
+  background: rgba(192, 132, 252, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(192, 132, 252, 0.4);
+}
+
+.cs-meta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.cs-eval-text {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+.cs-opening-text {
+  color: #c084fc;
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Timer Section */
+.cs-timer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cs-timer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+.cs-timer-label {
+  color: #94a3b8;
+  font-weight: 600;
+}
+.cs-timer-label.ready-pulse {
+  color: #00f59b;
+  font-weight: 800;
+  animation: cs-pulse 1.2s infinite ease-in-out;
+}
+.cs-timer-sec {
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.cs-progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.cs-progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #00c2ff, #00f59b);
+  border-radius: 4px;
+  transition: width 0.1s linear;
+}
+.cs-progress-bar-fill.ready {
+  background: #00f59b;
+  box-shadow: 0 0 10px #00f59b;
+}
+
+@keyframes cs-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.02); }
+}
+
+/* Accuracy Section */
+.cs-accuracy-section {
+  background: rgba(2, 6, 23, 0.4);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.cs-accuracy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+.cs-acc-title {
+  color: #94a3b8;
+}
+.cs-acc-val {
+  font-weight: 700;
+  color: #38bdf8;
+}
+.cs-acc-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.cs-acc-badge.safe {
+  background: rgba(0, 245, 155, 0.15);
+  color: #00f59b;
+}
+.cs-acc-badge.warning {
+  background: rgba(255, 71, 87, 0.2);
+  color: #ff4757;
+  border: 1px solid #ff4757;
+}
+
+/* ELO Selector */
+.cs-elo-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cs-elo-label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.cs-elo-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: space-between;
+}
+.cs-elo-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 5px 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cs-elo-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+}
+.cs-elo-btn.active {
+  background: rgba(0, 245, 155, 0.2);
+  border-color: #00f59b;
+  color: #00f59b;
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(0, 245, 155, 0.3);
+}
+
+/* Controls */
+.cs-controls-row {
+  display: flex;
+  gap: 8px;
+}
+.cs-btn-reroll {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(0, 194, 255, 0.2), rgba(0, 245, 155, 0.2));
+  border: 1px solid rgba(0, 245, 155, 0.35);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.cs-btn-reroll:hover {
+  background: linear-gradient(135deg, rgba(0, 194, 255, 0.35), rgba(0, 245, 155, 0.35));
+  border-color: #00f59b;
+  box-shadow: 0 0 14px rgba(0, 245, 155, 0.3);
+  transform: translateY(-1px);
+}
+.cs-btn-reroll:active {
+  transform: translateY(0);
+}
+
+/* Engine Badge in Header */
+.cs-engine-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 12px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.cs-engine-badge.wasm {
+  background: rgba(0, 194, 255, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(0, 194, 255, 0.35);
+}
+.cs-engine-badge.native {
+  background: rgba(0, 245, 155, 0.2);
+  color: #00f59b;
+  border: 1px solid rgba(0, 245, 155, 0.4);
+  box-shadow: 0 0 8px rgba(0, 245, 155, 0.25);
+}
+.cs-engine-badge.fallback {
+  background: rgba(255, 184, 0, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(255, 184, 0, 0.4);
+}
+
+.cs-btn-icon#cs-btn-multi.active {
+  background: rgba(0, 245, 155, 0.2);
+  color: #00f59b;
+  border: 1px solid rgba(0, 245, 155, 0.3);
+}
+
+/* MultiPV List Block */
+.cs-multipv-block {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cs-multipv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cs-multipv-empty {
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+  padding: 4px 0;
+  font-style: italic;
+}
+.cs-multipv-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.15s ease;
+}
+.cs-multipv-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(2px);
+}
+.cs-multipv-item.rank-1 {
+  border-left-color: #00f59b;
+}
+.cs-multipv-item.rank-2 {
+  border-left-color: #00c2ff;
+}
+.cs-multipv-item.rank-3 {
+  border-left-color: #ffb800;
+}
+.cs-multipv-item.selected {
+  background: rgba(255, 215, 0, 0.12);
+  border-right: 1px solid rgba(255, 215, 0, 0.3);
+}
+.cs-mp-rank {
+  font-size: 10px;
+  font-weight: 800;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+.cs-mp-rank.rank-1 {
+  background: rgba(0, 245, 155, 0.25);
+  color: #00f59b;
+}
+.cs-mp-rank.rank-2 {
+  background: rgba(0, 194, 255, 0.25);
+  color: #00c2ff;
+}
+.cs-mp-rank.rank-3 {
+  background: rgba(255, 184, 0, 0.25);
+  color: #ffb800;
+}
+.cs-mp-move {
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: 0.5px;
+  flex: 1;
+}
+.cs-mp-score {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-right: 6px;
+}
+.cs-mp-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.cs-hud-container {
+  --cs-persona-surface: #101d30;
+  --cs-persona-border: #334155;
+  --cs-persona-text: #e2e8f0;
+  --cs-persona-accent: #00f59b;
+}
+.cs-persona-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 10px; }
+.cs-persona-badge { color: var(--cs-persona-accent); font: 600 13px Georgia, serif; }
+#cs-persona-select { max-width: 150px; padding: 5px; color: var(--cs-persona-text); background: var(--cs-persona-surface); border: 1px solid var(--cs-persona-border); border-radius: 6px; font: 11px Verdana, sans-serif; }
+#cs-persona-select:focus-visible, .cs-multipv-item:focus-visible { outline: 2px solid var(--cs-persona-accent); outline-offset: 2px; }
+.cs-engine-badge.nnue { color: var(--cs-persona-accent); border: 1px solid var(--cs-persona-accent); background: var(--cs-persona-surface); box-shadow: 0 0 8px var(--cs-persona-surface); }
+.cs-multipv-item.unsafe { opacity: .45; cursor: default; }
+.cs-multipv-item.unsafe:hover { transform: none; }
+.cs-hud-title { flex-wrap: wrap; gap: 4px; }
+.cs-hud-header { align-items: flex-start; }
+@media (prefers-reduced-motion: reduce) { .cs-multipv-item { transition: none; } }
+/* Keyboard move feedback, including rejected board interactions. */
+.cs-move-action {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 6px;
+  line-height: 1.4;
+}

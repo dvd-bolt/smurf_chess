@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Chess Sensei Settings</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header class="header">
+      <div class="logo">
+        <span class="icon">👑</span>
+        <div>
+          <h1>Chess Sensei</h1>
+          <span class="version">v1.2.0 • Human Play</span>
+        </div>
+      </div>
+      <span class="status-badge" id="status-badge">АКТИВЕН</span>
+    </header>
+
+    <main class="settings-body">
+      <!-- Настройка ELO -->
+      <section class="section">
+        <div class="section-title-row">
+          <label for="elo-range">Уровень ELO</label>
+          <span class="elo-val" id="elo-display">1500 ELO</span>
+        </div>
+        <input type="range" id="elo-range" min="800" max="2600" step="100" value="1500">
+        <div class="elo-hint" id="elo-hint">Ориентир: 55% очков против равного уровня</div>
+      </section>
+
+      <section class="section persona-section" aria-labelledby="persona-title">
+        <div class="section-title-row"><span id="persona-title">Стиль игры</span><span class="persona-note">4 персоны</span></div>
+        <div class="persona-grid" role="group" aria-label="Выбор шахматной персоны">
+          <button type="button" class="persona-button" data-persona="balanced" aria-pressed="true">⚡ Баланс</button>
+          <button type="button" class="persona-button" data-persona="tal" aria-pressed="false">⚔️ Таль</button>
+          <button type="button" class="persona-button" data-persona="karpov" aria-pressed="false">🛡️ Карпов</button>
+          <button type="button" class="persona-button" data-persona="capablanca" aria-pressed="false">👑 Капабланка</button>
+        </div>
+        <p id="persona-description" class="persona-description" aria-live="polite"></p>
+      </section>
+
+      <!-- Тогглы режимов -->
+      <section class="section">
+        <label for="play-mode">Модель игры</label>
+        <select id="play-mode" class="human-select">
+          <option value="rated" selected>Игра по рейтингу ELO</option>
+          <option value="strict">Сильная игра — без ограничения ELO</option>
+          <option value="human">Человеческая игра</option>
+        </select>
+        <p class="persona-description">Рейтинговый режим ограничивает силу Stockfish. Ориентир при равном уровне — 55% очков с учётом ничьих. Ниже 1320 используется дополнительная модель ошибок; рейтинг предварительный. Персоны действуют в остальных режимах.</p>
+        <label class="toggle-row">
+          <span>📈 Адаптивная сила</span>
+          <input type="checkbox" id="toggle-adaptive" aria-describedby="adaptive-hint">
+          <span class="switch"></span>
+        </label>
+        <label for="target-win-rate">Цель адаптации</label>
+        <select id="target-win-rate" class="human-select">
+          <option value="0.6">60%</option>
+          <option value="0.5">50%</option>
+          <option value="0.55" selected>55%</option>
+          <option value="0.65">65%</option>
+          <option value="0.7">70%</option>
+        </select>
+        <p id="adaptive-hint" class="persona-description">В рейтинговом режиме учитывает очки: победа 1, ничья ½, поражение 0. В человеческом — долю побед. Настраивает силу между партиями; цель не гарантируется.</p>
+        <label for="stats-group">Статистика соперников</label>
+        <select id="stats-group" class="human-select" aria-label="Группа партий"></select>
+        <p id="human-statistics" class="persona-description" role="status">Нет завершённых партий</p>
+        <button type="button" id="reset-human-stats" class="btn-secondary">Сбросить статистику</button>
+      </section>
+      <section class="section toggles-section">
+        <label class="toggle-row">
+          <span>🤖 Автоматически выполнять ходы</span>
+          <input type="checkbox" id="toggle-auto-play" aria-describedby="auto-play-hint">
+          <span class="switch"></span>
+        </label>
+        <p class="persona-description" id="auto-play-hint">Играет выбранным ходом после обдумывания. Без задержки — сразу после расчёта.</p>
+        <label class="toggle-row">
+          <span id="safety-label">🛡️ Защита от зевов — всегда включена</span>
+          <input type="checkbox" id="toggle-blunder" checked disabled>
+          <span class="switch"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span>❄️ Стратегия «Сноубол» (Smooth Play)</span>
+          <input type="checkbox" id="toggle-snowball" checked>
+          <span class="switch"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span>⏱️ Задержка по часам (Human Delay)</span>
+          <input type="checkbox" id="toggle-delay" checked>
+          <span class="switch"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span>⚡ Локальный Stockfish (Python Bridge)</span>
+          <input type="checkbox" id="toggle-bridge">
+          <span class="switch"></span>
+        </label>
+      </section>
+
+      <!-- Быстрые действия -->
+      <section class="actions-section">
+        <button class="btn-primary" id="btn-open-test">
+          ♟️ Открыть тестовую доску
+        </button>
+      </section>
+    </main>
+
+    <footer class="footer">
+      Работает на Chess.com, Lichess и локальных досках.
+    </footer>
+  </div>
+
+  <script src="../engine/personas.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

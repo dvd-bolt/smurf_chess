@@ -1,0 +1,23 @@
+{
+  "version": "19.0.0",
+  "flavor": "lite-single",
+  "network": "nn-61e7af4bb97d.nnue",
+  "license": "GPL-3.0",
+  "source": "https://github.com/nmrugg/stockfish.js/tree/v19.0.0",
+  "assets": [
+    {
+      "path": "offscreen/stockfish-nnue.js",
+      "originalName": "stockfish-19-lite-single.js",
+      "bytes": 21415,
+      "sha256": "d3344124ab067fb0b90ee77873bb8e9fbf5fc01bc525fe714b0f942581e889e6",
+      "url": "https://github.com/nmrugg/stockfish.js/releases/download/v19.0.0/stockfish-19-lite-single.js"
+    },
+    {
+      "path": "offscreen/stockfish-nnue.wasm",
+      "originalName": "stockfish-19-lite-single.wasm",
+      "bytes": 1787571,
+      "sha256": "57ac2d72312aba346760e3f173f687a8c211208e97a87268436f7f0e10bb5387",
+      "url": "https://github.com/nmrugg/stockfish.js/releases/download/v19.0.0/stockfish-19-lite-single.wasm"
+    }
+  ]
+}
