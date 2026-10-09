@@ -1,57 +1,66 @@
 (function (root) {
-  const Profiles = root.PlayerProfiles || (typeof require === 'function' ? require('./player_profile.js') : null);
-  const Complexity = root.PositionComplexity || (typeof require === 'function' ? require('./position_complexity.js') : null);
-  const Styles = root.PersonaStyles || (typeof require === 'function' ? require('./personas.js') : null);
-  const Plans = root.PlanTracker || (typeof require === 'function' ? require('./plan_tracker.js').PlanTracker : null);
+  const Profiles = root.PlayerProfiles || require('./player_profile.js');
+  const Candidates = root.HumanCandidates || require('./human_candidates.js');
+  const Perception = root.HumanPerception || require('./human_perception.js');
+  const Complexity = root.PositionComplexity || require('./position_complexity.js');
+  const Styles = root.PersonaStyles || require('./personas.js');
+  const Plans = root.PlanTracker || require('./plan_tracker.js').PlanTracker;
+  const Legacy = root.LegacyHumanSelector || require('./human_legacy_selector.js').HumanSelector;
   class HumanSelector {
-    constructor(profile, planState = null) { this.profile = profile; this.plans = new Plans(planState); }
+    constructor(profile, planState = null, perceptionState = null) {
+      this.profile = profile; this.planState = planState; this.perceptionState = perceptionState;
+      if (profile.humanPolicyVersion !== 2) this.legacy = new Legacy(profile, planState);
+    }
     select(lines, context) {
-      const profile = this.profile;
+      if (this.legacy) return this.legacy.select(lines, context);
+      const generated = context.generated || Candidates.generate(context.fen, { plan: this.planState });
+      const byMove = new Map(lines.map(line => [line.uci, line]));
+      const proposed = context.candidates || generated.candidates;
+      const pool = new Map(proposed.map(candidate => [candidate.uci, candidate]));
+      for (const line of lines.slice(0, 4)) {
+        const candidate = generated.all.find(item => item.uci === line.uci);
+        if (candidate && !pool.has(line.uci)) pool.set(line.uci, { ...candidate, originReasons: [...candidate.originReasons, 'кандидат расчёта'] });
+      }
+      if (!pool.size) return null;
       const complexity = Complexity.inspect(context.fen, lines, context.remainingSeconds, context.familiar);
-      const sorted = lines.filter(line => complexity.candidates[line.uci] && line.score)
-        .slice().sort((a, b) => Complexity.score(b.score) - Complexity.score(a.score));
-      if (!sorted.length) return null;
-      const best = sorted[0];
-      const bestCp = Complexity.score(best.score);
-      const plan = this.plans.update(context.fen, bestCp, complexity, profile.persona);
-      const random = Profiles.random(profile.gameSeed + context.fen);
-      const ability = complexity.endgame ? profile.skills.endgame : complexity.level > 0.4 ? profile.skills.tactics : profile.skills.positional;
-      const temperature = profile.selectionTemperature * (0.65 + complexity.level * 0.9 + (complexity.timeTrouble ? 0.25 : 0));
-      const errorRoll = random();
-      const serious = errorRoll < profile.errorDistribution.serious * complexity.level;
-      const moderate = !serious && errorRoll < profile.errorDistribution.moderate * (0.3 + complexity.level);
-      const cap = serious ? profile.maxLossCp : moderate ? Math.min(profile.maxLossCp, 240) : Math.min(profile.maxLossCp, 130);
-      const obvious = complexity.legalMoves.length === 1 || complexity.candidates[best.uci].mateOne || complexity.candidates[best.uci].obviousCapture;
-      const items = sorted.map((line, index) => {
-        const details = complexity.candidates[line.uci];
-        const features = Styles.features(context.fen, line.uci, line.pv);
-        const lossCp = Math.max(0, bestCp - Complexity.score(line.score));
-        const comparable = !best.depth || !line.depth || Math.abs(best.depth - line.depth) <= 3;
-        const allowed = index === 0 || (!details.immediateRisk && comparable && lossCp <= cap &&
-          !(line.score.unit === 'mate' && line.score.value < 0 && bestCp > -10000));
-        const visibility = details.recognizability * (1 - details.difficulty * (1 - ability));
-        let weight = allowed ? Math.exp(-lossCp / Math.max(5, temperature)) * visibility * this.plans.compatibility(features) *
-          Styles.modifier(profile.persona, features, bestCp) : 0;
-        if (complexity.timeTrouble && details.sacrifice) weight *= 0.6;
-        if (moderate && lossCp >= 40) weight *= 2;
-        if (serious && lossCp >= 120) weight *= 4;
-        if (obvious && index !== 0) weight *= 0.005;
-        return { uci: line.uci, rank: index + 1, scoreCp: Complexity.score(line.score), lossCp, features,
-          isLegal: true, isAllowedByProfile: allowed, isWithinStrictSafety: lossCp <= 160, isSafe: lossCp <= 160,
-          confidence: comparable && (line.depth || 0) >= 6 ? 'normal' : 'limited', weight, details };
-      });
-      const total = items.reduce((sum, item) => sum + item.weight, 0);
-      items.forEach(item => { item.probability = total > 0 ? item.weight / total : item.rank === 1 ? 1 : 0; });
-      let roll = random();
-      let chosen = items[0];
-      for (const item of items) { roll -= item.probability; if (roll <= 0) { chosen = item; break; } }
-      const selectedLine = sorted.find(line => line.uci === chosen.uci);
-      const reason = chosen.details.mateOne ? 'Мат в один' : chosen.details.obviousCapture ? 'Очевидное взятие' : plan.label;
-      return { move: chosen.uci, rank: chosen.rank, rankLabel: 'Человеческая игра', isBook: false,
-        scoreCp: chosen.scoreCp, scoreText: selectedLine.score.unit === 'mate' ? `M${selectedLine.score.value}` :
-          `${chosen.scoreCp >= 0 ? '+' : ''}${(chosen.scoreCp / 100).toFixed(1)}`,
-        strategy: 'human', aiPersona: profile.persona, reason, plan: plan.type, planState: plan,
-        complexity, isTactical: chosen.details.isTactical, allCandidates: items.map(({ weight, details, ...item }) => item) };
+      // Align material/activity estimates with the shared position judgment. Otherwise an
+      // uncalculated move looks artificially better whenever all engine lines are negative.
+      const positionScores = lines.filter(line => line.score).map(line => Math.max(-2000, Math.min(2000, Complexity.score(line.score)))).sort((a,b) => b-a);
+      const positionEstimate = positionScores.length ? (positionScores[0] + (positionScores[1] ?? positionScores[0])) / 2 : generated.beforeCp;
+      const evaluationAnchor = (positionEstimate - generated.beforeCp) * this.profile.skills.positional;
+      const observations = [...pool.values()].map(candidate => ({ ...candidate,
+        ...Perception.inspect(candidate, byMove.get(candidate.uci), this.profile, { ...context, evaluationAnchor, endgame: generated.endgame, complexity }, this.perceptionState) }));
+      const plans = new Plans(context.planState ?? this.planState);
+      const noticedThreat = generated.exposedBefore >= 300 && observations.some(item => item.features.isProphylaxis && !item.recognizedThreats.length);
+      const plan = plans.update(context.fen, 0, { ...complexity, noticedThreat }, this.profile.persona);
+      const temperature = Math.max(4, this.profile.selectionTemperature * 0.65 * (complexity.timeTrouble ? 1.3 : 1));
+      const bestPerceived = Math.max(...observations.map(item => item.perceivedValue));
+      const weights = observations.map(item => Math.exp(Math.max(-700, (item.perceivedValue - bestPerceived) / temperature)) *
+        plans.compatibility(item.features, item) * Styles.modifier(this.profile.persona, item.features, item.perceivedValue));
+      const total = weights.reduce((sum, weight) => sum + weight, 0);
+      const random = Profiles.random(`${this.profile.gameSeed}:${context.decisionKey || context.fen}:choice-v2`);
+      let roll = random(), chosen = observations[0];
+      observations.forEach((item, index) => { item.probability = weights[index] / total; });
+      for (const item of observations) { roll -= item.probability; if (roll <= 0) { chosen = item; break; } }
+      const evaluated = lines.filter(l => l.score);
+      const line = byMove.get(chosen.uci), bestCp = evaluated.length ? Math.max(...evaluated.map(l => Complexity.score(l.score))) : 0;
+      const attention = (this.perceptionState?.attention ?? 0.97) * 0.85 + (0.92 + random() * 0.08) * 0.15;
+      const reason = chosen.mateOne ? 'Мат в один' : chosen.uci === plan.nextMove ? `${plan.label}: ${plan.goal}` : chosen.originReasons[0];
+      return { move: chosen.uci, rank: line?.rank || lines.findIndex(l => l.uci === chosen.uci) + 1 || 1,
+        rankLabel: 'Человеческая игра', strategy: 'human', humanPolicyVersion: 2, aiPersona: this.profile.persona, isBook: false,
+        scoreCp: line?.score ? Complexity.score(line.score) : undefined,
+        scoreText: line?.score ? line.score.unit === 'mate' ? `M${line.score.value}` : (line.score.value / 100).toFixed(1) : '—',
+        reason, perceivedValue: chosen.perceivedValue, recognizedThreats: chosen.recognizedThreats, missedMotifs: chosen.missedMotifs,
+        plan: plan.type, planState: plan, pendingState: { planState: Plans.advance(plan, chosen.uci), perceptionState: { attention } },
+        complexity, isTactical: !!complexity.candidates[chosen.uci]?.isTactical,
+        allCandidates: observations.map(item => ({ uci: item.uci, rank: lines.findIndex(l => l.uci === item.uci) + 1,
+          probability: item.probability, isLegal: true, isAllowedByProfile: true,
+          lossCp: byMove.get(item.uci)?.score ? Math.max(0, bestCp - Complexity.score(byMove.get(item.uci).score)) : null,
+          isWithinStrictSafety: byMove.get(item.uci)?.score ? bestCp - Complexity.score(byMove.get(item.uci).score) <= 160 : false,
+          isSafe: byMove.get(item.uci)?.score ? bestCp - Complexity.score(byMove.get(item.uci).score) <= 160 : false,
+          originReasons: item.originReasons, perceivedValue: item.perceivedValue, shallowValue: item.shallowValue,
+          recognizedThreats: item.recognizedThreats, missedMotifs: item.missedMotifs, uncertainty: item.uncertainty,
+          engineEvaluation: item.engineEvaluation, confidence: item.engineEvaluation?.confidence || 'limited' })) };
     }
   }
   root.HumanSelector = HumanSelector;

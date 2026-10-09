@@ -2,8 +2,8 @@
 (function (root) {
   const Rules = root.ChessRules || (typeof require === 'function' ? require('../vendor/chess.js').ChessRules : null);
   const PERSONAS = Object.freeze({
-    balanced: { name: 'Баланс', icon: '⚡', description: 'Сбалансированный выбор по рейтингу и оценке позиции.' },
-    tal: { name: 'Таль', icon: '⚔️', description: 'Шахи, взятия и инициатива в пределах безопасной потери.' },
+    balanced: { name: 'Баланс', icon: '⚡', description: 'Сбалансированная игра с учётом силы и понимания позиции.' },
+    tal: { name: 'Таль', icon: '⚔️', description: 'Предпочитает инициативу, атаки и активные продолжения.' },
     karpov: { name: 'Карпов', icon: '🛡️', description: 'Развитие, крепкая пешечная структура и профилактика.' },
     capablanca: { name: 'Капабланка', icon: '👑', description: 'Размен ферзей при перевесе, активный король и проходные.' }
   });
@@ -87,7 +87,7 @@
       default: return 1;
     }
   }
-  const api = { PERSONAS, normalizePersona, features, modifier };
+  const api = { PERSONAS, normalizePersona, features, modifier, attacked, exposedMaterial };
   root.PersonaStyles = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

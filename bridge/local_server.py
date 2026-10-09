@@ -37,7 +37,7 @@ def validate_request(req):
         raise ValueError('Invalid turn or castling rights')
     if not re.fullmatch(r'-|[a-h][36]', parts[3]) or not parts[4].isdigit() or not parts[5].isdigit() or int(parts[5]) < 1:
         raise ValueError('Invalid FEN counters or en passant')
-    limits = {'depth': (1, 24, 12), 'multipv': (1, 8, 3), 'movetime': (50, 3000, 600)}
+    limits = {'depth': (1, 24, 12), 'multipv': (1, 8, 3), 'movetime': (1, 3000, 600)}
     values = {}
     for key, (low, high, default) in limits.items():
         value = req.get(key, default)

@@ -23,9 +23,9 @@ class MoveExecutor {
       if (detector.siteType === 'test') {
         board.dispatchEvent(new CustomEvent('chess-sensei-play', { detail: JSON.stringify({ uci, fen }) }));
       } else {
-        this.clickSquare(uci.slice(0, 2));
+        await this.clickSquare(uci.slice(0, 2));
         if (!isAllowed() || detector.getCurrentFen() !== fen) return false;
-        this.clickSquare(uci.slice(2, 4));
+        await this.clickSquare(uci.slice(2, 4));
       }
       for (let attempt = 0; attempt < 20; attempt++) {
         if (detector.getCurrentFen() === game.fen()) { detector.triggerCheck(); return true; }
@@ -36,7 +36,7 @@ class MoveExecutor {
           const choice = document.querySelector(detector.siteType === 'lichess'
             ? `#promotion-choice piece.${name}, .promotion-choice piece.${name}`
             : `.promotion-window .piece.${color}${uci[4]}, .promotion-window .${color}${uci[4]}`);
-          if (choice) this.clickAt(choice, choice.getBoundingClientRect());
+          if (choice) await this.clickAt(choice, choice.getBoundingClientRect());
         }
         await new Promise(resolve => setTimeout(resolve, 50));
       }
@@ -55,10 +55,22 @@ class MoveExecutor {
     if (!target || !(target === board || board.contains(target) || board.shadowRoot?.contains(target))) {
       throw new Error('Доска перекрыта. Освободите её и нажмите пробел.');
     }
-    this.clickAt(target, { left: x, top: y, width: 0, height: 0 });
+    return this.clickAt(target, { left: x, top: y, width: 0, height: 0 });
   }
 
   clickAt(target, rect) {
+    if (this.detector.siteType === 'lichess' && typeof chrome !== 'undefined' && chrome.runtime?.id) {
+      return new Promise((resolve, reject) => {
+        try {
+          chrome.runtime.sendMessage({ action: 'LICHESS_TRUSTED_CLICK',
+            x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, response => {
+            const error = chrome.runtime.lastError?.message || (!response?.success && response?.error);
+            if (error || !response?.success) reject(new Error(error || 'Ввод Lichess недоступен.'));
+            else resolve();
+          });
+        } catch (error) { reject(error); }
+      });
+    }
     const options = { bubbles: true, cancelable: true, composed: true, view: window,
       clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0 };
     for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {

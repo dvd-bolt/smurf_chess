@@ -23,9 +23,10 @@ class BridgeTests(unittest.TestCase):
             with self.subTest(request=request), self.assertRaises(ValueError):
                 bridge.validate_request(request)
     def test_human_candidates(self):
-        _, options = bridge.validate_request({'fen': START, 'multipv': 8, 'searchmoves': ['a2a3']})
+        _, options = bridge.validate_request({'fen': START, 'multipv': 8, 'searchmoves': ['a2a3'], 'movetime': 20})
         self.assertEqual(options['multipv'], 8)
         self.assertEqual(options['searchmoves'], ['a2a3'])
+        self.assertEqual(options['movetime'], 20)
 
     def test_rating_request(self):
         _, options = bridge.validate_request({'fen': START, 'ratingElo': 1535})

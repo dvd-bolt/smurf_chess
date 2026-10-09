@@ -6,6 +6,7 @@ const SenseiPersonas = typeof PersonaStyles !== 'undefined' ? PersonaStyles : (t
 const ControllerProfiles = typeof PlayerProfiles !== 'undefined' ? PlayerProfiles : require('./player_profile.js');
 const ControllerHuman = typeof HumanSelector !== 'undefined' ? HumanSelector : require('./human_selector.js').HumanSelector;
 const ControllerRated = typeof RatedProfile !== 'undefined' ? RatedProfile : require('./rated_profile.js');
+const ControllerCandidates = typeof HumanCandidates !== 'undefined' ? HumanCandidates : require('./human_candidates.js');
 class EngineController {
   constructor(options = {}) {
     this.openingsBook = new SenseiBook();
@@ -36,7 +37,8 @@ class EngineController {
   setSession(session) {
     this.gameSession = session;
     this.ratingSearchStarted = false;
-    this.humanSelector = new ControllerHuman(session.data.profileSnapshot, session.data.planState);
+    this.humanSearchStarted = false;
+    this.humanSelector = new ControllerHuman(session.data.profileSnapshot, session.data.planState, session.data.perceptionState);
   }
   async requestAnalysis(fen, options) {
     if (!this.isContextAvailable()) return { success: false, lines: [], error: 'Расширение обновилось. Полностью обновите страницу (F5).' };
@@ -76,6 +78,7 @@ class EngineController {
     if (this.playMode === 'rated' && !options.analysisOnly) return this.analyzeRated(fen, legalMoves, legal, options);
     const human = this.playMode === 'human' && !options.analysisOnly;
     const activeSession = this.gameSession;
+    if (human && (activeSession ? activeSession.data.profileSnapshot.humanPolicyVersion === 2 : true)) return this.analyzeHuman(fen, legal, options);
     if (human && activeSession?.data?.decisions[fen]) {
       const saved = activeSession.data.decisions[fen];
       if (saved.strategy === 'human' || saved.strategy === 'human-book') return { ...saved };
@@ -142,6 +145,65 @@ class EngineController {
     return result;
   }
   getFallbackMove() { return null; }
+  async analyzeHuman(fen, legal, options = {}) {
+    const activeSession = this.gameSession;
+    const saved = activeSession?.decision(fen);
+    if (saved?.humanPolicyVersion === 2 && legal.has(saved.move)) return { ...saved };
+    const profile = activeSession?.data.profileSnapshot || ControllerProfiles.create({ targetElo: this.moveSelector.targetElo, aiPersona: this.moveSelector.aiPersona });
+    const start = Date.now(), budget = Math.max(30, Number(options.movetime) || 600);
+    const deadline = start + budget;
+    const generated = ControllerCandidates.generate(fen, { plan: activeSession?.data.planState, limit: 8 });
+    const decisionKey = activeSession?.decisionKey(fen) || fen;
+    await this.init();
+    const opening = this.openingsBook.lookup(fen);
+    const familiar = !!opening && ControllerProfiles.familiar(fen, profile);
+    if (familiar) {
+      const book = ControllerProfiles.bookMove(opening, legal, profile);
+      if (book) {
+        const result = { ...this.moveSelector.selectMove([], book), strategy: 'human-book', humanPolicyVersion: 2,
+          reason: 'Знакомый дебют', scoreText: '—', scoreCp: undefined, isFamiliarOpening: true,
+          openingName: opening.name, openingEco: opening.eco, elapsedMs: Date.now() - start,
+          lines: [{ uci: book.uci, rank: 1, multipv: 1, isBook: true }] };
+        if (activeSession?.decisionKey(fen) === decisionKey) activeSession.remember(fen, result);
+        return result;
+      }
+    }
+    // Deadline covers both searches. Never run a separate deep search for every legal move.
+    const modelReserve = Math.max(15, Math.min(100, this.humanModelMs || 35));
+    const available = Math.max(1, deadline - Date.now() - modelReserve);
+    const response = await this.requestAnalysis(fen, { depth: 24, multipv: 4,
+      movetime: Math.max(1, Math.floor(available * 0.6)), newGame: !this.humanSearchStarted });
+    if (this.gameSession === activeSession) this.humanSearchStarted = true;
+    if (!response.success && !response.lines?.length) return { move: null, lines: [], error: response.error || 'Движок недоступен', engineSource: 'unavailable' };
+    const byMove = new Map((response.lines || []).filter(line => legal.has(line.uci) && line.score).map(line => [line.uci, line]));
+    const pool = new Map(generated.candidates.map(c => [c.uci, c]));
+    for (const line of byMove.values()) {
+      const candidate = generated.all.find(c => c.uci === line.uci);
+      if (candidate) pool.set(line.uci, candidate);
+    }
+    const missing = [...pool.keys()].filter(uci => !byMove.has(uci));
+    const left = deadline - Date.now() - modelReserve;
+    if (missing.length && left >= 25 && !(Number.isFinite(options.remainingSeconds) && options.remainingSeconds <= 10)) {
+      const extras = await this.requestAnalysis(fen, { analysisOnly: true, depth: 24, multipv: missing.length,
+        movetime: Math.max(1, left - 15), searchmoves: missing });
+      for (const line of extras.lines || []) if (missing.includes(line.uci) && line.score) byMove.set(line.uci, line);
+    }
+    const lines = [...pool.keys()].map(uci => byMove.get(uci) || { uci, pv: [uci], depth: 0, confidence: 'limited' });
+    lines.sort((a, b) => Number(!!b.score) - Number(!!a.score) || (b.score && a.score ? this.moveSelector.normalizeScore(b.score) - this.moveSelector.normalizeScore(a.score) : 0));
+    lines.forEach((line, index) => { line.rank = index + 1; line.multipv = index + 1; });
+    const modelStart = Date.now();
+    const selector = new ControllerHuman(profile, activeSession?.data.planState, activeSession?.data.perceptionState);
+    const selection = selector.select(lines, { fen, generated, candidates: [...pool.values()], decisionKey,
+      planState: activeSession?.data.planState, remainingSeconds: options.remainingSeconds, familiar });
+    this.humanModelMs = (this.humanModelMs || 35) * 0.5 + (Date.now() - modelStart + 10) * 0.5;
+    const result = { ...selection, lines, engineSource: response.engineSource || (response.isLocalNative ? 'native' : 'js'),
+      engineName: response.engineName, nnueNetwork: response.nnueNetwork, engineTransport: response.engineTransport,
+      isLocalNative: !!response.isLocalNative, fallbackToWasm: !!response.fallbackToWasm, fallbackReason: response.fallbackReason,
+      elapsedMs: Date.now() - start, analysisBudgetMs: budget, isFamiliarOpening: false,
+      openingName: opening?.name || null, openingEco: opening?.eco || null };
+    if (!activeSession || activeSession.decisionKey(fen) === decisionKey) activeSession?.remember(fen, result);
+    return result;
+  }
   async analyzeRated(fen, legalMoves, legal, options) {
     const activeSession = this.gameSession;
     const saved = activeSession?.data?.decisions[fen];

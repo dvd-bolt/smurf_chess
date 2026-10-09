@@ -19,6 +19,9 @@ async function main() {
         { uci: options.searchmoves?.[0] || 'a2a3', score: { unit: 'cp', value: -250 }, depth: 12 }] };
   };
   const session = new GameSession(); session.begin({ mode: 'rated', playerColor: 'w' }, { targetElo: 1000 }, 0, START);
+  // This assertion isolates weakened UCI bestmove; the error-blend distribution is tested below.
+  session.data.profileSnapshot.gameSeed = Array.from({ length: 100 }, (_, i) => `bestmove-${i}`).find(seed =>
+    !Rated.alternative(Rated.create(1000, seed), START, new ChessRules().moves({ verbose: true }), 'a2a3'));
   controller.setSession(session);
   const chosen = await controller.analyzePosition(START);
   assert.equal(chosen.strategy, 'rated');
@@ -84,6 +87,15 @@ async function main() {
   assert.ok(worker.commands.includes('setoption name UCI_LimitStrength value false'));
   worker.emit('info depth 12 score cp 90 pv e2e4'); worker.emit('bestmove e2e4');
   assert.equal((await full).appliedElo, undefined);
+  const roots = protocol.analyze({ fen: START, depth: 12, movetime: 20, multipv: 2, searchmoves: ['a2a3', 'h2h3'] });
+  assert.ok(worker.commands.includes('go depth 12 movetime 20 searchmoves a2a3 h2h3'));
+  worker.emit('info depth 4 multipv 1 score cp 10 pv a2a3');
+  worker.emit('info depth 4 multipv 2 score cp 0 pv h2h3');
+  // A partially emitted next iteration changes rank 1 before rank 2 is replaced.
+  worker.emit('info depth 5 multipv 1 score cp 15 pv h2h3');
+  worker.emit('bestmove h2h3');
+  const covered = await roots;
+  assert.deepEqual(new Set(covered.lines.map(line => line.uci)), new Set(['a2a3', 'h2h3']));
   protocol.destroy();
   console.log('PASS rated: queued UCI requests preserve weakened bestmove and reset strength even for explicit null');
   const engine = new UciEngine(path.resolve(__dirname, '../offscreen/stockfish-nnue.js'), { WorkerClass: NodeWorker });

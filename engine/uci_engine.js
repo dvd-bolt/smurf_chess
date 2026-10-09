@@ -69,7 +69,7 @@
         this.worker.postMessage('setoption name UCI_Elo value ' + this.job.appliedElo);
       }
       const depth = Math.min(24, Math.max(1, Number(o.depth) || 10));
-      const movetime = Math.min(3000, Math.max(50, Number(o.movetime) || 600));
+      const movetime = Math.min(3000, Math.max(1, Number(o.movetime) || 600));
       this.worker.postMessage('setoption name MultiPV value ' + Math.min(8, Math.max(1, Number(o.multipv) || 3)));
       this.worker.postMessage('position fen ' + o.fen);
       const roots = Array.isArray(o.searchmoves) ? o.searchmoves.filter(move => /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move)).slice(0, 8) : [];
@@ -115,13 +115,18 @@
           const moves = pv[1].split(/\s+/);
           this.job.lines[multipv] = { multipv, depth: Number(line.match(/\bdepth\s+(\d+)/)?.[1] || 0),
             score: { unit: score[1], value: Number(score[2]) }, uci: moves[0], pv: moves };
+          if (this.job.options.searchmoves?.includes(moves[0])) {
+            this.job.rootLines ||= {};
+            const previous = this.job.rootLines[moves[0]], current = this.job.lines[multipv];
+            if (!previous || current.depth >= previous.depth) this.job.rootLines[moves[0]] = current;
+          }
         }
       }
       if (line.startsWith('bestmove ')) {
         clearTimeout(this.timer);
         const job = this.job;
         this.job = null;
-        const lines = Object.values(job.lines).sort((a, b) => a.multipv - b.multipv);
+        const lines = Object.values(job.rootLines || job.lines).sort((a, b) => a.multipv - b.multipv);
         const bestmove = line.split(/\s+/)[1];
         job.resolve({ success: lines.length > 0 || /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(bestmove), terminal: /bestmove (?:\(none\)|0000)/.test(line), lines, bestmove,
           appliedElo: job.appliedElo, ratingSupported: !!(this.uciOptions.UCI_Elo && this.uciOptions.UCI_LimitStrength),

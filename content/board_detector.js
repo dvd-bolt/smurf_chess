@@ -355,11 +355,14 @@ class BoardDetector {
   }
 
   parseLichessBoard() {
+    // Chessground transforms describe animation frames, not always occupied squares.
+    if (this.boardElement.querySelector('piece.anim, piece.fading, piece.dragging')) return null;
     const grid = Array(8).fill(null).map(() => Array(8).fill(''));
     const pieceElements = this.boardElement.querySelectorAll('piece');
     const flipped = this.isFlipped();
     const boardRect = this.boardElement.getBoundingClientRect();
     const squareSize = boardRect.width / 8;
+    const squareHeight = boardRect.height / 8;
 
     pieceElements.forEach(el => {
       if (el.classList.contains('ghost') || el.classList.contains('dragging')) return;
@@ -378,9 +381,9 @@ class BoardDetector {
 
       const style = el.getAttribute('style') || '';
       const match = style.match(/translate(?:3d)?\(\s*(-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px(?:,\s*0(?:px)?)?\)/);
-      if (match && squareSize > 0) {
+      if (match && squareSize > 0 && squareHeight > 0) {
         let col = Math.round(parseFloat(match[1]) / squareSize);
-        let row = Math.round(parseFloat(match[2]) / squareSize);
+        let row = Math.round(parseFloat(match[2]) / squareHeight);
 
         if (flipped) {
           col = 7 - col;
@@ -429,6 +432,10 @@ class BoardDetector {
 
   readMoves() {
     if (typeof document === 'undefined' || this.siteType === 'test') return [];
+    if (this.siteType === 'lichess') {
+      const round = BoardDetector.lichessRoundHistory();
+      if (round) return round.moves.slice(0, round.ply);
+    }
     const list = document.querySelector(this.siteType === 'lichess'
       ? 'l4x, .analyse__moves, .round__app .moves, .moves'
       : 'wc-move-list, .move-list-container, .vertical-move-list, .move-list');
@@ -450,6 +457,26 @@ class BoardDetector {
         if (prefix && !/^[KQRBN]/.test(san)) san = prefix + san;
         return san.replace(/^\d+\.(?:\.\.)?\s*/, '').replace(/[!?]/g, '').replace(/0/g, 'O');
       }).filter(san => /^(?:O-O(?:-O)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?)[+#]?$/.test(san));
+  }
+
+  static lichessRoundHistory() {
+    if (typeof document === 'undefined') return null;
+    const buttons = Array.from(document.querySelectorAll('.round__app button[data-ply]'));
+    if (buttons.length !== 4) return null;
+    // Round uses generated tag/class names. Its navigation and adjacent move list
+    // provide a structural anchor that survives those names changing.
+    const list = buttons[0].parentElement?.nextElementSibling;
+    if (!list) return null;
+    const moves = Array.from(list.children).map(node => {
+      // Draw offers are appended as child elements after the SAN text.
+      const san = node.getAttribute('data-san') || Array.from(node.childNodes)
+        .filter(child => child.nodeType === 3 || child.nodeName.toLowerCase() === 'san')
+        .map(child => child.textContent).join('').trim();
+      return san.replace(/[!?]/g, '').replace(/0/g, 'O');
+    }).filter(san => /^(?:O-O(?:-O)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?)[+#]?$/.test(san));
+    const next = buttons[2].getAttribute('data-ply');
+    const ply = /^\d+$/.test(next || '') ? Math.max(0, Math.min(moves.length, Number(next) - 1)) : moves.length;
+    return { moves, ply };
   }
 
   detectCastlingRights(grid) {
@@ -535,6 +562,7 @@ class BoardDetector {
       }
     }
 
+    if (this.siteType === 'lichess' && this.boardElement?.querySelector('piece.anim, piece.fading, piece.dragging')) return;
     const fen = this.getCurrentFen();
     if (!fen) {
       if (!this.unavailable) {

@@ -2,6 +2,10 @@
 class GameContext {
   static isHistory(board) {
     if (board?.dataset.history === 'true') return true;
+    if (board?.tagName?.toLowerCase() === 'cg-board' && typeof BoardDetector !== 'undefined') {
+      const round = BoardDetector.lichessRoundHistory();
+      if (round) return round.ply < round.moves.length;
+    }
     const moves = [...document.querySelectorAll('wc-move-list .node, .move-list .node, .moves-list .node, .round__app move')];
     const selected = moves.findIndex(node => node.matches('.selected, .active, [aria-current="true"]'));
     return selected >= 0 && selected < moves.length - 1;
@@ -23,7 +27,10 @@ class GameContext {
     return { site, sourceId: gameId || null, route: location.origin + path,
       opponentCategory: category, opponentLevelBucket: levelBucket, timeControl,
       playerColor: detector.getUserColor(), persona: settings.playMode === 'rated' ? 'balanced' : settings.aiPersona, mode: settings.playMode,
-      baseLevel: settings.targetElo };
+      baseLevel: settings.targetElo,
+      ...(settings.playMode === 'human' ? { humanPolicyVersion: 2, calibrationVersion: PlayerProfiles.HUMAN_CALIBRATION_VERSION,
+        target: settings.humanTargetWinRate ?? 0.65,
+        strengthBias: settings.adaptiveStrength ? Number(settings.humanStrengthBias ?? 170) : 0 } : {}) };
   }
   static result(fen, color, board) {
     const verified = GameOutcomes.outcome(fen, color);

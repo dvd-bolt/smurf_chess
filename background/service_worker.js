@@ -6,8 +6,9 @@
 let creatingOffscreen = null;
 let recoveringOffscreen = null;
 let offscreenGeneration = 0;
-if (typeof importScripts === 'function') importScripts('../engine/strength_adapter.js', 'stats_store.js');
+if (typeof importScripts === 'function') importScripts('../engine/strength_adapter.js', 'stats_store.js', 'trusted_input.js');
 const humanStatsStore = typeof StatsStore !== 'undefined' ? new StatsStore(chrome.storage.local) : null;
+const lichessInput = typeof LichessInput !== 'undefined' ? new LichessInput(chrome) : null;
 
 async function recoverOffscreen(failedGeneration) {
   if (recoveringOffscreen) return recoveringOffscreen;
@@ -69,6 +70,10 @@ warmup();
 
 // Слушатель сообщений
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'LICHESS_TRUSTED_CLICK' && lichessInput) {
+    lichessInput.click(message, sender).then(sendResponse).catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
   if (message.action?.startsWith('HUMAN_') && humanStatsStore) {
     humanStatsStore.handle(message, sender).then(sendResponse).catch(error => sendResponse({ success: false, error: error.message }));
     return true;

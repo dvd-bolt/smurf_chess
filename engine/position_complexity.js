@@ -26,7 +26,7 @@
         if (reply.captured || /[+#]/.test(reply.san)) sharp++;
       }
       game.load(fen);
-      const obviousCapture = !!move.captured && !recapture && !move.promotion;
+      const obviousCapture = !!move.captured && !recapture && !move.promotion && !replies.some(reply => reply.san.includes('#'));
       const sacrifice = recapture && (!move.captured || values[move.piece] > values[move.captured]);
       const quiet = !move.captured && !givesCheck;
       candidates[line.uci] = { mateOne, obviousCapture, sacrifice, givesCheck, promotion: !!move.promotion,

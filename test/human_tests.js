@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const { ChessRules } = require('../vendor/chess.js');
-const Profiles = require('../engine/player_profile.js');
+const CurrentProfiles = require('../engine/player_profile.js');
+// Compatibility coverage for already-started v1 sessions. V2 has its own behavioural suite.
+const Profiles = { ...CurrentProfiles, create: (options = {}, seed) => CurrentProfiles.create({ ...options, humanPolicyVersion: 1 }, seed) };
 const Complexity = require('../engine/position_complexity.js');
 const { PlanTracker } = require('../engine/plan_tracker.js');
 const { HumanSelector } = require('../engine/human_selector.js');
@@ -71,7 +73,7 @@ async function runHumanTests() {
     plans.update(checkFen, -200, Complexity.inspect(checkFen), 'balanced');
     assert.equal(plans.state.type, 'defend');
   });
-  const session = new GameSession(); session.begin({ playerColor: 'w', mode: 'human' }, { targetElo: 1400 }, 40, initial);
+  const session = new GameSession(); session.begin({ playerColor: 'w', mode: 'human' }, { targetElo: 1400, humanPolicyVersion: 1 }, 40, initial);
   const game = new ChessRules(); game.move('e4');
   const transition = transitionBetween(initial, game.fen());
   session.observe(transition); session.observe(transition); session.remember(initial, selected);
@@ -146,8 +148,8 @@ async function runHumanTests() {
   staleController.init = async () => true;
   staleController.openingsBook.db = {};
   const sessionA = new GameSession(), sessionB = new GameSession();
-  sessionA.begin({ playerColor: 'w' }, { targetElo: 1000 }, 0, initial);
-  sessionB.begin({ playerColor: 'w' }, { targetElo: 1800 }, 0, initial);
+  sessionA.begin({ playerColor: 'w' }, { targetElo: 1000, humanPolicyVersion: 1 }, 0, initial);
+  sessionB.begin({ playerColor: 'w' }, { targetElo: 1800, humanPolicyVersion: 1 }, 0, initial);
   staleController.setSession(sessionA);
   let release;
   staleController.requestAnalysis = () => new Promise(resolve => { release = resolve; });

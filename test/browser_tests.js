@@ -6,6 +6,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
+const trustedInputOnly = process.argv.includes('--lichess-input');
 const launchOptions = { headless: true, ...(process.env.BROWSER_PATH ? { executablePath: process.env.BROWSER_PATH } : { channel: 'msedge' }) };
 async function waitForAsync(read, timeout = 30000) {
   const deadline = Date.now() + timeout;
@@ -129,6 +130,13 @@ async function humanPlayChecks(page) {
   const popup = await page.context().newPage();
   await popup.goto(page.url().split('/test/')[0] + '/popup/popup.html');
   await popup.locator('#play-mode').selectOption('human');
+  assert.equal(await popup.locator('#target-win-rate').inputValue(), '0.65');
+  await popup.locator('#target-win-rate').selectOption('0.7');
+  await popup.locator('#play-mode').selectOption('rated');
+  assert.equal(await popup.locator('#target-win-rate').inputValue(), '0.55');
+  await popup.locator('#play-mode').selectOption('human');
+  assert.equal(await popup.locator('#target-win-rate').inputValue(), '0.7');
+  await popup.locator('#target-win-rate').selectOption('0.65');
   await popup.locator('.toggle-row').filter({ has: popup.locator('#toggle-adaptive') }).click();
   await popup.locator('#elo-range').fill('1000');
   await popup.locator('#elo-range').dispatchEvent('change');
@@ -142,7 +150,7 @@ async function humanPlayChecks(page) {
     const stored = await getSession();
     const fen = await page.locator('#test-board').getAttribute('data-fen');
     const selected = (await page.locator('.cs-multipv-item.selected .cs-mp-move').textContent()).replace(/\s|→/g, '');
-    return stored?.profileSnapshot.level === 1000 && stored.decisions[fen]?.strategy === 'human-book' && stored.decisions[fen]?.move === selected ? stored : null;
+    return stored?.profileSnapshot.level === 1170 && stored.decisions[fen]?.strategy === 'human-book' && stored.decisions[fen]?.move === selected ? stored : null;
   });
   const move = await page.locator('.cs-multipv-item.selected .cs-mp-move').textContent();
   await page.reload();
@@ -152,10 +160,10 @@ async function humanPlayChecks(page) {
   await popup.locator('#elo-range').fill('1800');
   await popup.locator('#elo-range').dispatchEvent('change');
   await page.waitForFunction(() => document.querySelector('#cs-game-stats').textContent.includes('со следующей партии'));
-  assert.equal((await getSession()).profileSnapshot.level, 1000);
+  assert.equal((await getSession()).profileSnapshot.level, 1170);
   await page.locator('.preset-btn').nth(1).click();
   await page.waitForFunction(() => document.querySelectorAll('.cs-multipv-item').length >= 4 && document.querySelector('#cs-rank-pill').textContent === 'Человеческая игра');
-  await waitForAsync(async () => (await getSession())?.profileSnapshot.level === 1800);
+  await waitForAsync(async () => (await getSession())?.profileSnapshot.level === 1970);
   await page.locator('.cs-multipv-item[aria-disabled="false"]').last().click();
   const selected = await page.locator('.cs-multipv-item.selected .cs-mp-move').textContent();
   await page.evaluate(() => document.activeElement.blur());
@@ -200,6 +208,8 @@ async function ratedPlayChecks(page) {
   assert.equal(await popup.locator('[data-persona="tal"]').isDisabled(), true);
   assert.equal(await page.locator('#cs-persona-select').isDisabled(), true);
   assert.equal(await page.locator('.cs-multipv-item[aria-disabled="false"]').count(), 1);
+  const displayed = first.lines.filter(line => line.rank <= 3 || line.uci === first.move);
+  assert.equal(await page.locator('.chess-sensei-overlay line').count(), displayed.length);
   await page.reload();
   await page.waitForSelector('.cs-multipv-item.selected');
   assert.equal((await decision()).move, first.move);
@@ -361,7 +371,7 @@ async function hotkeyChecks(page) {
 async function lichessChecks(browser) {
   const page = await browser.newPage();
   await page.setContent('<div class="cg-wrap orientation-black"><cg-board style="display:block;position:relative;width:400px;height:400px"></cg-board></div><div class="rclock-bottom running"><span class="time">3:00</span></div>');
-  for (const file of ['vendor/chess.js', 'engine/position_state.js', 'content/board_detector.js', 'content/visual_overlay.js', 'content/time_manager.js', 'content/move_executor.js']) {
+  for (const file of ['vendor/chess.js', 'engine/position_state.js', 'content/board_detector.js', 'engine/game_session.js', 'content/game_context.js', 'content/visual_overlay.js', 'content/time_manager.js', 'content/move_executor.js']) {
     await page.addScriptTag({ path: path.join(root, file) });
   }
   const result = await page.evaluate(async () => {
@@ -406,8 +416,58 @@ async function lichessChecks(browser) {
   assert.equal(result.clock, 180);
   assert.equal(result.played, true);
   assert.match(result.after, / w KQkq e6 0 2$/);
+
+  const history = await page.evaluate(() => {
+    // Actual round layout observed on Lichess: generated tags, no data-fen,
+    // and a draw offer embedded in the SAN node. Start after six plies (F5).
+    document.body.innerHTML = '<main class="round__app"><div class="cg-wrap orientation-white"><cg-board style="display:block;width:400px;height:400px"></cg-board></div><i5d><bo3><button data-ply="0"></button><button data-ply="5"></button><button data-ply="-"></button><button data-ply="-"></button></bo3><app><qzm>1</qzm><z7yx>e4</z7yx><z7yx>e5</z7yx><qzm>2</qzm><z7yx>Nf3</z7yx><z7yx>Nc6</z7yx><qzm>3</qzm><z7yx>Bb5<draw>½?</draw></z7yx><z7yx class="a1t">a6</z7yx></app></i5d></main>';
+    const board = document.querySelector('cg-board');
+    const game = new ChessRules();
+    const sans = ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6'];
+    const names = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+    const render = () => {
+      board.innerHTML = '';
+      game.board().forEach((rank, r) => rank.forEach((piece, c) => {
+        if (!piece) return;
+        const el = document.createElement('piece');
+        el.className = `${piece.color === 'w' ? 'white' : 'black'} ${names[piece.type]}`;
+        el.style.transform = `translate(${c * 50}px, ${r * 50}px)`;
+        board.appendChild(el);
+      }));
+    };
+    sans.forEach(san => game.move(san)); render();
+    const detector = new BoardDetector(); detector.boardElement = detector.findBoard();
+    const recovered = detector.getCurrentFen();
+    const latestIsHistory = GameContext.isHistory(board);
+    const buttons = document.querySelectorAll('button[data-ply]');
+    buttons[1].setAttribute('data-ply', '2'); buttons[2].setAttribute('data-ply', '4');
+    game.undo(); game.undo(); game.undo(); render();
+    const historical = new BoardDetector(); historical.boardElement = historical.findBoard();
+    const historicalFen = historical.getCurrentFen();
+    const viewingHistory = GameContext.isHistory(board);
+    const parsed = historical.readMoves();
+    board.querySelector('piece').classList.add('anim');
+    let unavailable = 0;
+    historical.onUnavailable = () => unavailable++;
+    const duringAnimation = historical.getCurrentFen(); historical.triggerCheck();
+    board.querySelector('piece').classList.remove('anim');
+    const afterAnimation = historical.getCurrentFen();
+    // Return to the latest board with a completely new detector, as on reload.
+    ['Nc6', 'Bb5', 'a6'].forEach(san => game.move(san)); render();
+    buttons[1].setAttribute('data-ply', '5'); buttons[2].setAttribute('data-ply', '-');
+    const reloaded = new BoardDetector(); reloaded.boardElement = reloaded.findBoard();
+    return { recovered, expected: game.fen(), latestIsHistory, viewingHistory,
+      parsed, historicalFen, duringAnimation, unavailable, afterAnimation, reloaded: reloaded.getCurrentFen() };
+  });
+  assert.equal(history.recovered, history.expected);
+  assert.equal(history.reloaded, history.expected);
+  assert.equal(history.latestIsHistory, false); assert.equal(history.viewingHistory, true);
+  assert.deepEqual(history.parsed, ['e4', 'e5', 'Nf3']);
+  assert.match(history.historicalFen, / b KQkq - 1 2$/);
+  assert.equal(history.duringAnimation, null); assert.equal(history.unavailable, 0);
+  assert.equal(history.afterAnimation, history.historicalFen);
   await page.close();
-  console.log('PASS browser: Lichess DOM fixture, full FEN, orientation, arrows, clocks');
+  console.log('PASS browser: Lichess round history without data-fen, reload in midgame, draw annotations, history navigation, animation guard, orientation, arrows, clocks');
 }
 
 async function main() {
@@ -427,7 +487,20 @@ async function main() {
   let browser, context;
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sensei-browser-'));
   try {
-    if (!process.env.HUMAN_ONLY) {
+    let extensionRoot = root;
+    if (trustedInputOnly) {
+      // Give the disposable test extension permission at install time. Production
+      // keeps it optional; no existing browser profile or permission is changed.
+      extensionRoot = path.join(profile, 'extension');
+      fs.mkdirSync(extensionRoot);
+      for (const directory of ['background', 'content', 'engine', 'offscreen', 'popup', 'icons', 'vendor', 'test']) {
+        fs.cpSync(path.join(root, directory), path.join(extensionRoot, directory), { recursive: true });
+      }
+      const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+      manifest.permissions.push('debugger'); manifest.optional_permissions = [];
+      fs.writeFileSync(path.join(extensionRoot, 'manifest.json'), JSON.stringify(manifest));
+    }
+    if (!process.env.HUMAN_ONLY && !trustedInputOnly) {
     browser = await chromium.launch(launchOptions);
     const standalone = await browser.newPage({ viewport: { width: 1800, height: 1100 } });
     await standalone.goto(`http://127.0.0.1:${server.address().port}/test/test_board.html`);
@@ -436,10 +509,43 @@ async function main() {
     await browser.close(); browser = null;
     }
     context = await chromium.launchPersistentContext(profile, { ...launchOptions, viewport: { width: 1800, height: 1100 },
-      args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`] });
+      args: [`--disable-extensions-except=${extensionRoot}`, `--load-extension=${extensionRoot}`] });
     let worker = context.serviceWorkers()[0];
     if (!worker) worker = await context.waitForEvent('serviceworker', { timeout: 15000 });
     const extensionId = worker.url().split('/')[2];
+    if (trustedInputOnly) {
+      await worker.evaluate(() => chrome.storage.sync.set({ autoPlay: false, humanDelay: false,
+        playMode: 'rated', lichessInputEnabled: false }));
+      await context.route('https://lichess.org/**', async route => {
+        const url = new URL(route.request().url());
+        if (url.pathname === '/rules.js' || url.pathname === '/fixture.js') {
+          return route.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(path.join(root,
+            url.pathname === '/rules.js' ? 'vendor/chess.js' : 'test/lichess_input_fixture.js'), 'utf8') });
+        }
+        return route.fulfill({ contentType: 'text/html', body: '<!doctype html><main class="round__app"><div class="cg-wrap orientation-white"><cg-board style="display:block;position:relative;width:400px;height:400px"></cg-board></div><i5d><bo3><button data-ply="0"></button><button data-ply="-"></button><button data-ply="-"></button><button data-ply="-"></button></bo3><app></app></i5d></main><style>piece {position:absolute;width:50px;height:50px;pointer-events:none}</style><script src="/rules.js"></script><script src="/fixture.js"></script>' });
+      });
+      const fixture = await context.newPage();
+      await fixture.goto('https://lichess.org/analysis');
+      await fixture.waitForSelector('.cs-multipv-item.selected');
+      await fixture.evaluate(() => {
+        document.querySelector('cg-board').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 30, clientY: 330 }));
+        document.activeElement.blur();
+      });
+      assert.equal(await fixture.locator('cg-board').getAttribute('data-untrusted'), 'rejected');
+      await fixture.keyboard.press('Space');
+      await fixture.waitForFunction(() => document.querySelector('#cs-move-action').textContent.includes('настройках'));
+      assert.equal(await fixture.locator('cg-board').getAttribute('data-played'), '0');
+      await worker.evaluate(() => chrome.storage.sync.set({ lichessInputEnabled: true }));
+      await fixture.waitForSelector('.cs-multipv-item.selected');
+      await fixture.keyboard.press('Space');
+      await fixture.waitForFunction(() => document.querySelector('cg-board').dataset.played === '1');
+      await worker.evaluate(() => chrome.storage.sync.set({ autoPlay: true }));
+      await fixture.evaluate(() => { fixtureGame.move(fixtureGame.moves()[0]); renderFixture(); });
+      await fixture.waitForFunction(() => document.querySelector('cg-board').dataset.played === '3');
+      assert.equal(await fixture.evaluate(() => typeof EngineController), 'undefined');
+      console.log('PASS browser: Lichess rejects synthetic clicks; optional input stays disabled until enabled; real debugger input executes Space and subsequent autoplay from isolated content scripts');
+      return;
+    }
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/test/test_board.html`);
     await page.waitForSelector('#chess-sensei-hud');

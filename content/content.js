@@ -17,10 +17,12 @@
   let memoryState = StrengthAdapter.empty();
   const pageKey = location.origin + location.pathname;
   const defaults = { targetElo: 1500, aiPersona: 'balanced', useLocalBridge: false, blunderFilter: true, snowballMode: true, humanDelay: true, autoPlay: false,
-    playMode: 'rated', adaptiveStrength: false, targetWinRate: 0.55 };
+    playMode: 'rated', adaptiveStrength: false, targetWinRate: 0.55, humanTargetWinRate: 0.65, ratedTargetScore: 0.55,
+    settingsVersion: 2, humanStrengthBias: 170, lichessInputEnabled: false };
   const settings = { ...defaults };
   async function stateMessage(action, extra = {}) {
-    const message = { action, pageKey, target: settings.targetWinRate, ...extra };
+    const target = extra.target ?? extra.record?.target ?? PlaySettings.target(settings, gameSession.data?.mode || settings.playMode);
+    const message = { action, pageKey, target, ...extra };
     if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
       try {
         return await new Promise(resolve => chrome.runtime.sendMessage(message, response => {
@@ -32,11 +34,11 @@
     // The standalone board uses the same model without extension APIs.
     try { memoryState = JSON.parse(sessionStorage.getItem('sensei-human-state')) || memoryState; } catch (_) {}
     if (action === 'HUMAN_SESSION_SAVE') memoryState.sessions[pageKey] = extra.session;
-    if (action === 'HUMAN_GAME_RECORD') StrengthAdapter.record(memoryState, extra.record, settings.targetWinRate);
+    if (action === 'HUMAN_GAME_RECORD') StrengthAdapter.record(memoryState, extra.record, target);
     if (action === 'HUMAN_STATS_RESET') memoryState.groups = {};
     try { sessionStorage.setItem('sensei-human-state', JSON.stringify(memoryState)); } catch (_) {}
     return { success: true, session: memoryState.sessions[pageKey] || null, groups: memoryState.groups,
-      summary: StrengthAdapter.current(memoryState, extra.group, settings.targetWinRate) };
+      summary: StrengthAdapter.current(memoryState, extra.group, target) };
   }
   function saveSession(immediate = false) {
     clearTimeout(saveTimer);
@@ -52,9 +54,9 @@
     personaSelect.disabled = settings.playMode === 'rated';
     personaSelect.title = settings.playMode === 'rated' ? 'В рейтинговом режиме ход выбирает ограниченный по ELO Stockfish' : 'Стиль игры';
     const data = gameSession.data;
-    const summary = StrengthAdapter.current({ groups: statsGroups }, StrengthAdapter.group(data), settings.targetWinRate);
+    const summary = StrengthAdapter.current({ groups: statsGroups }, StrengthAdapter.group(data), data.target ?? PlaySettings.target(settings, data.mode));
     const pending = (settings.playMode !== 'rated' && data.persona !== settings.aiPersona) || data.baseLevel !== settings.targetElo || data.mode !== settings.playMode;
-    hud.updateGameStats(summary, settings.adaptiveStrength, pending);
+    hud.updateGameStats(summary, data.adaptiveStrength ?? settings.adaptiveStrength, pending, data.profileSnapshot);
   }
   async function checkGameResult() {
     const data = gameSession.data;
@@ -97,7 +99,7 @@
     const changed = !old || old.route !== meta.route || old.sourceId !== meta.sourceId || old.playerColor !== userColor ||
       (initial && old.lastFen !== fen && !transition && !document.querySelector('wc-move-list .node, .move-list .node, .moves-list .node'));
     if (changed) {
-      const response = await stateMessage('HUMAN_STATE_GET', { group: StrengthAdapter.group(meta) });
+      const response = await stateMessage('HUMAN_STATE_GET', { group: StrengthAdapter.group(meta), target: PlaySettings.target(settings) });
       if (request !== generation) return false;
       if (response.groups) statsGroups = response.groups;
       const offset = settings.adaptiveStrength && ['human', 'rated'].includes(settings.playMode) ? response.summary?.offset || 0 : 0;
@@ -121,11 +123,10 @@
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
       try {
         const stored = await chrome.storage.sync.get([...Object.keys(settings), 'ratingPolicyVersion']);
-        Object.assign(settings, stored);
-        if (stored.ratingPolicyVersion !== RatedProfile.VERSION) {
-          Object.assign(settings, { playMode: 'rated', targetWinRate: 0.55 });
-          await chrome.storage.sync.set({ playMode: 'rated', targetWinRate: 0.55, ratingPolicyVersion: RatedProfile.VERSION });
-        }
+        Object.assign(settings, PlaySettings.normalize(stored));
+        if (stored.settingsVersion !== 2) await chrome.storage.sync.set({ settingsVersion: 2,
+          humanTargetWinRate: settings.humanTargetWinRate, ratedTargetScore: settings.ratedTargetScore,
+          ratingPolicyVersion: RatedProfile.VERSION });
       } catch (error) { console.warn(error); }
     }
     timeMgr = new TimeManager();
@@ -232,7 +233,11 @@
     hud.updateAccuracy(engine.moveSelector.getLiveAccuracy());
   }
   function applySettings(update, save = false) {
+    if (Object.hasOwn(update, 'targetWinRate') && !Object.hasOwn(update, 'humanTargetWinRate') && !Object.hasOwn(update, 'ratedTargetScore')) {
+      update[(update.playMode || settings.playMode) === 'human' ? 'humanTargetWinRate' : 'ratedTargetScore'] = update.targetWinRate;
+    }
     Object.assign(settings, update);
+    Object.assign(settings, PlaySettings.normalize(settings));
     settings.aiPersona = PersonaStyles.normalizePersona(settings.aiPersona);
     settings.playMode = ['human', 'rated'].includes(settings.playMode) ? settings.playMode : 'strict';
     settings.targetWinRate = Math.max(0.5, Math.min(0.8, Number(settings.targetWinRate) || 0.55));
@@ -240,8 +245,10 @@
     hud.currentElo = settings.targetElo;
     hud.updateEloActiveButton();
     hud.setPersona(settings.aiPersona);
-    if (gameSession.data && ['playMode', 'targetElo', 'aiPersona'].some(key => Object.hasOwn(update, key))) {
-      if (gameSession.data.mode !== settings.playMode || gameSession.data.baseLevel !== settings.targetElo || (settings.playMode !== 'rated' && gameSession.data.persona !== settings.aiPersona)) {
+    if (gameSession.data && ['playMode', 'targetElo', 'aiPersona', 'adaptiveStrength', 'humanTargetWinRate', 'ratedTargetScore'].some(key => Object.hasOwn(update, key))) {
+      if (gameSession.data.mode !== settings.playMode || gameSession.data.baseLevel !== settings.targetElo ||
+          gameSession.data.target !== PlaySettings.target(settings) || gameSession.data.adaptiveStrength !== settings.adaptiveStrength ||
+          (settings.playMode !== 'rated' && gameSession.data.persona !== settings.aiPersona)) {
         gameSession.data.mixedSettings = true;
         saveSession();
       }
@@ -366,7 +373,8 @@
   }
   function drawCurrent() {
     if (!currentAnalysisResult || detector.lastFen !== currentAnalysisResult.fen) return;
-    const safeLines = currentAnalysisResult.isBook ? currentAnalysisResult.lines : currentAnalysisResult.lines.filter(line => currentAnalysisResult.allCandidates?.some(candidate => candidate.uci === line.uci && (candidate.isAllowedByProfile ?? candidate.isSafe)));
+    // Rated alternatives are visible analysis; only the frozen profile move is executable.
+    const safeLines = currentAnalysisResult.isBook || currentAnalysisResult.strategy === 'rated' ? currentAnalysisResult.lines : currentAnalysisResult.lines.filter(line => currentAnalysisResult.allCandidates?.some(candidate => candidate.uci === line.uci && (candidate.isAllowedByProfile ?? candidate.isSafe)));
     overlay.renderMultiMoves(safeLines, currentAnalysisResult.move, {
       rank: currentAnalysisResult.rank, isBook: currentAnalysisResult.isBook, isFlipped: detector.isFlipped()
     });
@@ -385,6 +393,11 @@
       currentAnalysisResult.complexity = details;
       currentAnalysisResult.isTactical = !!details.candidates[uci]?.isTactical;
       currentAnalysisResult.reason = details.candidates[uci]?.mateOne ? 'Мат в один' : details.candidates[uci]?.obviousCapture ? 'Очевидное взятие' : currentAnalysisResult.planState?.label;
+      if (currentAnalysisResult.humanPolicyVersion === 2) {
+        currentAnalysisResult.pendingState = { planState: PlanTracker.advance(currentAnalysisResult.planState, uci),
+          perceptionState: currentAnalysisResult.pendingState?.perceptionState };
+        gameSession.data.manualOverride = true;
+      }
     }
     hud.updateMove(currentAnalysisResult);
     hud.updateMultiMoves(currentAnalysisResult.lines, uci, { isBook: currentAnalysisResult.isBook, candidates: currentAnalysisResult.allCandidates, human: ['human', 'rated'].includes(currentAnalysisResult.strategy) });

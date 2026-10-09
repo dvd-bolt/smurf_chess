@@ -2,10 +2,12 @@
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   function group(meta = {}) {
     return [meta.site || 'unknown', meta.opponentCategory || 'unknown', meta.opponentLevelBucket || 'unknown',
-      meta.timeControl || 'unknown', meta.persona || 'balanced', meta.mode || 'strict', Math.round(Number(meta.baseLevel) || 1500)].join('|');
+      meta.timeControl || 'unknown', meta.persona || 'balanced', meta.mode || 'strict', Math.round(Number(meta.baseLevel) || 1500),
+      ...(meta.mode === 'human' && meta.humanPolicyVersion ? [`h${meta.humanPolicyVersion}`, `c${meta.calibrationVersion || 1}`,
+        `wins${Math.round((meta.target ?? 0.65) * 100)}`, `bias${meta.strengthBias || 0}`] : [])].join('|');
   }
-  function summarize(records = [], target = 0.65, previousOffset = 0, metric = 'wins') {
-    const games = records.filter(item => ['win', 'draw', 'loss'].includes(item.result)).slice(-100);
+  function summarize(records = [], target = 0.65, previousOffset = 0, metric = 'wins', window = 100, deadband = 0.05) {
+    const games = records.filter(item => ['win', 'draw', 'loss'].includes(item.result)).slice(-window);
     const wins = games.filter(item => item.result === 'win').length;
     const draws = games.filter(item => item.result === 'draw').length;
     const n = games.length;
@@ -21,9 +23,9 @@
     const boundedTarget = clamp(Number(target) || 0.65, 0.5, 0.8);
     let offset = previousOffset;
     let status = n < 20 ? 'collecting' : 'uncertain';
-    if (n >= 20 && games.length % 10 === 0) {
-      if (low > boundedTarget + 0.05) { offset -= 40; status = 'decrease'; }
-      else if (high < boundedTarget - 0.05) { offset += 40; status = 'increase'; }
+    if (n >= 20) {
+      if (low > boundedTarget + deadband) { offset -= 40; status = 'decrease'; }
+      else if (high < boundedTarget - deadband) { offset += 40; status = 'increase'; }
       else if (observed >= boundedTarget - 0.05 && observed <= boundedTarget + 0.05) status = 'target';
     }
     offset = clamp(offset, -600, 600);
@@ -38,26 +40,42 @@
     state.seen.push(item.id); state.seen = state.seen.slice(-5000);
     state.history.push(item); state.history = state.history.slice(-500);
     // Games whose settings changed midway cannot calibrate a single strength profile.
-    if (item.mixedSettings) return true;
+    if (item.mixedSettings || item.manualOverride) return true;
     const key = group(item);
     const previous = state.groups[key] || { records: [], offset: 0, total: 0 };
-    previous.records.push({ id: item.id, result: item.result }); previous.records = previous.records.slice(-100);
+    // IDs are already kept in the deduplication ledger; avoid duplicating them in both statistical windows.
+    const sample = { result: item.result, effectiveStrength: item.profileSnapshot?.modelLevel ?? item.profileSnapshot?.level ?? item.baseLevel };
+    previous.records.push(sample); previous.records = previous.records.slice(-100);
+    previous.validationRecords = [...(previous.validationRecords || []), sample].slice(-2000);
     previous.total++;
     // Once the window is full, updates still happen every ten new games, not on every game.
-    const summary = summarize(previous.records, target, previous.offset, item.mode === 'rated' ? 'score' : 'wins');
-    const base = clamp(Number(item.baseLevel) || 1500, 800, 2800);
+    const metric = item.mode === 'rated' ? 'score' : 'wins';
+    const summary = summarize(previous.records, item.target ?? target, previous.offset, metric);
+    const modelCorrection = item.mode === 'human' && item.humanPolicyVersion === 2 ? Number(item.profileSnapshot?.modelCorrection) || 0 : 0;
+    const base = clamp((Number(item.baseLevel) || 1500) + (Number(item.strengthBias) || 0) + modelCorrection, 800, 2800);
+    const stableRecords = previous.validationRecords.filter(record => record.effectiveStrength === clamp(base + previous.offset, 800, 2800));
+    // A 100-game rolling interval never narrows further. V2 accumulates evidence
+    // at the actual frozen strength, so a persistent 75% rate can eventually correct.
+    const adaptation = item.mode === 'human' && item.humanPolicyVersion === 2 ?
+      summarize(stableRecords, summary.target, previous.offset, metric, 2000, 0) : summary;
     const minimum = Math.max(-600, 800 - base), maximum = Math.min(600, 2800 - base);
-    if (previous.total >= 20 && previous.total % 10 === 0) previous.offset = clamp(summary.offset, minimum, maximum);
-    const limited = summary.offset < minimum || summary.offset > maximum || summary.status === 'limit';
-    previous.summary = { ...summary, status: limited ? 'limit' : summary.status, offset: previous.offset, total: previous.total };
+    if (previous.total >= 20 && previous.total % 10 === 0 && adaptation.games >= 20) previous.offset = clamp(adaptation.offset, minimum, maximum);
+    const limited = adaptation.offset < minimum || adaptation.offset > maximum || adaptation.status === 'limit';
+    previous.summary = { ...summary, status: limited ? 'limit' : adaptation.status, offset: previous.offset, total: previous.total };
+    previous.target = summary.target;
+    previous.effectiveStrength = clamp(base + previous.offset, 800, 2800);
     state.groups[key] = previous;
     return true;
   }
   function current(state, key, target = 0.65) {
     const stored = state.groups[key];
-    const summary = summarize(stored?.records || [], target, stored?.offset || 0, String(key).includes('|rated|') ? 'score' : 'wins');
-    return { ...summary, status: stored?.summary?.status === 'limit' ? 'limit' : summary.status,
-      offset: stored?.offset || 0, total: stored?.total || 0 };
+    const metric = String(key).includes('|rated|') ? 'score' : 'wins';
+    const summary = summarize(stored?.records || [], stored?.target ?? target, stored?.offset || 0, metric);
+    const stable = (stored?.validationRecords || []).filter(record => record.effectiveStrength === stored.effectiveStrength);
+    const validation = summarize(stable, summary.target, stored?.offset || 0, metric, 2000);
+    const confirmed = metric === 'wins' && validation.games >= 350 && validation.low >= summary.target - 0.05 && validation.high <= summary.target + 0.05;
+    return { ...summary, status: stored?.summary?.status === 'limit' ? 'limit' : String(key).includes('|h2|') ? validation.status : summary.status,
+      offset: stored?.offset || 0, total: stored?.total || 0, validation, confirmed };
   }
   const api = { group, summarize, empty, record, current };
   root.StrengthAdapter = api;

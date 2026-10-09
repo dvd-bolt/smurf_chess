@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chess Sensei — Smart Assistant",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Шахматный ассистент с человеческими профилями, планами игры, адаптивной силой и задержкой по часам.",
   "icons": {
     "16": "icons/icon16.png",
@@ -22,6 +22,7 @@
     "activeTab",
     "offscreen"
   ],
+  "optional_permissions": ["debugger"],
   "host_permissions": [
     "*://*.chess.com/*",
     "*://*.lichess.org/*",
@@ -56,10 +57,15 @@
         "engine/openings_book.js",
         "engine/personas.js",
         "engine/move_selector.js",
+        "engine/play_settings.js",
         "engine/player_profile.js",
         "engine/rated_profile.js",
         "engine/position_complexity.js",
         "engine/plan_tracker.js",
+        "engine/human_candidates.js",
+        "engine/human_perception.js",
+        "engine/legacy_plan_tracker.js",
+        "engine/human_legacy_selector.js",
         "engine/human_selector.js",
         "engine/strength_adapter.js",
         "engine/game_session.js",

@@ -12,7 +12,7 @@
         <span class="icon">👑</span>
         <div>
           <h1>Chess Sensei</h1>
-          <span class="version">v1.2.0 • Human Play</span>
+          <span class="version">v1.4.0 • Human Play</span>
         </div>
       </div>
       <span class="status-badge" id="status-badge">АКТИВЕН</span>
@@ -46,7 +46,7 @@
         <select id="play-mode" class="human-select">
           <option value="rated" selected>Игра по рейтингу ELO</option>
           <option value="strict">Сильная игра — без ограничения ELO</option>
-          <option value="human">Человеческая игра</option>
+          <option value="human">Человеческая игра — экспериментальная</option>
         </select>
         <p class="persona-description">Рейтинговый режим ограничивает силу Stockfish. Ориентир при равном уровне — 55% очков с учётом ничьих. Ниже 1320 используется дополнительная модель ошибок; рейтинг предварительный. Персоны действуют в остальных режимах.</p>
         <label class="toggle-row">
@@ -75,6 +75,8 @@
           <span class="switch"></span>
         </label>
         <p class="persona-description" id="auto-play-hint">Играет выбранным ходом после обдумывания. Без задержки — сразу после расчёта.</p>
+        <button type="button" id="btn-lichess-input" class="btn-secondary" aria-describedby="lichess-input-hint">Разрешить автоходы Lichess</button>
+        <p class="persona-description" id="lichess-input-hint" role="status">Для Lichess нужен ввод через браузер. Кнопка запросит дополнительное разрешение «debugger»; браузер может показывать уведомление об отладке.</p>
         <label class="toggle-row">
           <span id="safety-label">🛡️ Защита от зевов — всегда включена</span>
           <input type="checkbox" id="toggle-blunder" checked disabled>
@@ -114,6 +116,7 @@
   </div>
 
   <script src="../engine/personas.js"></script>
+  <script src="../engine/play_settings.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

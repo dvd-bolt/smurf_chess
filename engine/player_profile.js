@@ -1,5 +1,16 @@
 (function (root) {
+  const HUMAN_CALIBRATION_VERSION = 3;
+  // Provisional local correction from fixed-search NNUE matches. Kept separate
+  // from the displayed nominal strength and from the between-game offset.
+  const HUMAN_CORRECTIONS = [[800, 0], [1000, 0], [1400, -200], [1800, 0], [2800, 0]];
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+  function humanCorrection(level) {
+    for (let i = 1; i < HUMAN_CORRECTIONS.length; i++) {
+      const [lo, from] = HUMAN_CORRECTIONS[i-1], [hi, to] = HUMAN_CORRECTIONS[i];
+      if (level <= hi) return Math.round(from + (to-from) * clamp((level-lo)/(hi-lo),0,1));
+    }
+    return 0;
+  }
   function hash(text) {
     let value = 2166136261;
     for (const char of String(text)) value = Math.imul(value ^ char.charCodeAt(0), 16777619);
@@ -17,10 +28,16 @@
   function create(options = {}, seed = 'sensei') {
     const baseLevel = clamp(Number(options.targetElo) || 1500, 800, 2800);
     const adaptationOffset = clamp(Number(options.adaptationOffset) || 0, -600, 600);
-    const level = clamp(baseLevel + adaptationOffset, 800, 2800);
-    const ability = (level - 800) / 2000;
+    const humanPolicyVersion = options.humanPolicyVersion === 1 ? 1 : 2;
+    const strengthBias = humanPolicyVersion === 2 && options.playMode === 'human' && options.adaptiveStrength === true ?
+      clamp(Number(options.humanStrengthBias ?? 170), 0, 300) : 0;
+    const level = clamp(baseLevel + strengthBias + adaptationOffset, 800, 2800);
+    const modelCorrection = humanPolicyVersion === 2 && (options.playMode || 'human') === 'human' ? humanCorrection(baseLevel) : 0;
+    const modelLevel = clamp(level + modelCorrection, 800, 2800);
+    const ability = (modelLevel - 800) / 2000;
     const persona = ['balanced', 'tal', 'karpov', 'capablanca'].includes(options.aiPersona) ? options.aiPersona : 'balanced';
-    return { schemaVersion: 1, baseLevel, adaptationOffset, level, persona, gameSeed: String(seed),
+    return { schemaVersion: 1, humanPolicyVersion, calibrationVersion: HUMAN_CALIBRATION_VERSION, modelCorrection, modelLevel, baseLevel, strengthBias, adaptationOffset,
+      effectiveStrength: level, level, persona, gameSeed: String(seed),
       repertoireId: `${persona}:${Math.floor(baseLevel / 400)}`,
       skills: { tactics: clamp(0.35 + ability * 0.63 + (persona === 'tal' ? 0.06 : 0), 0, 0.99),
         positional: clamp(0.4 + ability * 0.58 + (persona === 'karpov' ? 0.06 : 0), 0, 0.99),
@@ -44,7 +61,7 @@
     if (number > Math.floor(4 + profile.skills.opening * 10)) return false;
     return random(profile.repertoireId + fen.split(' ').slice(0, 4).join(' '))() < profile.skills.opening;
   }
-  const api = { create, random, hash, clamp, bookMove, familiar };
+  const api = { create, random, hash, clamp, bookMove, familiar, humanCorrection, HUMAN_CALIBRATION_VERSION, HUMAN_CORRECTIONS };
   root.PlayerProfiles = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

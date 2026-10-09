@@ -59,7 +59,7 @@ class HudWidget {
         <div class="cs-hud-title">
           <span class="cs-hud-icon">👑</span>
           <span class="cs-hud-name">Chess Sensei</span>
-          <span id="cs-version" style="font-size:10px;color:#94a3b8">1.3.0</span>
+          <span id="cs-version" style="font-size:10px;color:#94a3b8">1.4.0</span>
           <span class="cs-engine-badge" id="cs-engine-badge">⏳ Движок</span>
         </div>
         <div class="cs-hud-actions">
@@ -439,7 +439,7 @@ class HudWidget {
       item.tabIndex = unsafe ? -1 : 0;
       item.setAttribute('role', 'button');
       item.setAttribute('aria-disabled', String(unsafe));
-      item.title = unsafe ? 'Ход исключён выбранным профилем' : candidate?.isWithinStrictSafety === false ?
+      item.title = unsafe ? 'Ход исключён выбранным профилем' : candidate?.lossCp === null ? 'Оценка ограничена; причина выбора: ' + (candidate.originReasons?.[0] || 'манёвр') : candidate?.isWithinStrictSafety === false ?
         `Допустимая неточность профиля: потеря ${(candidate.lossCp / 100).toFixed(2)} пешки` : 'Выбрать этот ход';
 
       const moveFormatted = line.uci && line.uci.length >= 4
@@ -493,7 +493,7 @@ class HudWidget {
     evalTextEl.textContent = `Оценка: ${moveData.scoreText || '+0.0'}`;
     openingTextEl.textContent = moveData.reason || (moveData.openingName ? `📖 ${moveData.openingName}` : '');
   }
-  updateGameStats(summary, adaptive = false, pending = false) {
+  updateGameStats(summary, adaptive = false, pending = false, profile = null) {
     let element = this.container.querySelector('#cs-game-stats');
     if (!element) {
       element = document.createElement('div');
@@ -505,7 +505,9 @@ class HudWidget {
     const n = summary.total || summary.games;
     const rate = summary.games ? summary.metric === 'score' ? `${Math.round(summary.scoreRate * 100)}% очков · ${summary.wins}/${summary.games} побед` : `${summary.wins}/${summary.games} побед (${Math.round(summary.winRate * 100)}%)` : 'нет завершённых партий';
     element.textContent = `${adaptive ? `Цель ${Math.round(summary.target * 100)}% · ` : ''}${rate}` +
-      (adaptive && n < 20 ? ' · собираем данные' : adaptive && summary.status === 'limit' ? ' · предел силы' : '') +
+      (adaptive && (n < 20 || summary.status === 'collecting') ? ' · собираем данные' : adaptive && summary.status === 'limit' ? ' · предел силы' : '') +
+      (adaptive && summary.status === 'target' ? summary.confirmed ? ' · диапазон подтверждён' : ' · предварительно в диапазоне' : '') +
+      (profile?.humanPolicyVersion === 2 ? ` · сила ${profile.baseLevel} → ${profile.level}` : '') +
       (pending ? ' · новый профиль со следующей партии' : '');
     element.title = summary.games ? `Ничьи: ${summary.draws}; поражения: ${summary.losses}. Интервал ${summary.metric === 'score' ? 'доли очков' : 'доли побед'}: ${Math.round(summary.low * 100)}–${Math.round(summary.high * 100)}%.` : 'Результаты учитываются только после подтверждения окончания партии.';
   }
