@@ -1,15 +1,15 @@
 /**
- * HudWidget - Плавающий неоновый HUD-виджет для обучения на Chess.com.
+ * HudWidget - Компактный тактический HUD-виджет Chess Sensei.
  * Отображает:
- * 1. Рекомендованный ход с рейтингом качества (Топ-1..3)
- * 2. Детальный список линий MultiPV (Топ 1–3) с оценками позиций (cp / mate)
- * 3. Таймер обучающей задержки хода («ХОДИ СЕЙЧАС»)
- * 4. Индикатор движка (⚡ JS в браузере или 🚀 Native Python Bridge)
- * 5. Контроль точности игры (Live Accuracy) и переключатель ELO
- * 6. Переключатель режима стрелок (3 стрелки ⇄ 1 стрелка)
+ * 1. Рекомендованный ход с рейтингом качества (Топ-1..3 / Книга / Человеческая игра) и кнопкой Re-roll
+ * 2. Детальный список линий MultiPV со скроллом и оценками позиций (cp / mate)
+ * 3. Таймер человеческой задержки хода («ХОДИ СЕЙЧАС»)
+ * 4. Индикатор движка (NNUE WASM / JS / Native Python Bridge)
+ * 5. Контроль точности игры (Live Accuracy), статистику сессии и быстрый выбор ELO / цвета / персоны
  */
 
 const HudPersonas = typeof PersonaStyles !== 'undefined' ? PersonaStyles : (typeof require === 'function' ? require('../engine/personas.js') : null);
+
 class HudWidget {
   constructor(options = {}) {
     this.container = null;
@@ -26,13 +26,15 @@ class HudWidget {
     this.currentColorMode = options.currentColorMode || 'auto';
     this.isMinimized = false;
     this.showMultiArrows = true;
-    this.engineSource = 'wasm'; // 'wasm' | 'native'
+    this.engineSource = 'wasm'; // 'wasm' | 'native' | 'nnue'
 
     this.init();
   }
 
   setMoveActionStatus(message) {
-    this.container.querySelector('#cs-move-action').textContent = message;
+    if (!this.container) return;
+    const el = this.container.querySelector('#cs-move-action');
+    if (el) el.textContent = message;
   }
 
   init() {
@@ -55,95 +57,93 @@ class HudWidget {
     }
 
     this.container.innerHTML = `
-      <div class="cs-hud-header" id="cs-hud-drag-handle">
-        <div class="cs-hud-title">
-          <span class="cs-hud-icon">👑</span>
-          <span class="cs-hud-name">Chess Sensei</span>
-          <span id="cs-version" style="font-size:10px;color:#94a3b8">1.4.0</span>
+      <!-- Header -->
+      <header class="cs-hud-header" id="cs-hud-drag-handle">
+        <div class="cs-hud-brand">
+          <span class="cs-hud-title">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M19 21H5M12 3v3M8 6h8M9 9h6l1 5H8l1-5zM9 14l-2 7h10l-2-7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Sensei</span>
+            <span id="cs-version" style="font-size:9.5px;color:#64748b;font-weight:500;">1.4.0</span>
+          </span>
           <span class="cs-engine-badge" id="cs-engine-badge">⏳ Движок</span>
         </div>
-        <div class="cs-hud-actions">
-          <button class="cs-btn-icon active" id="cs-btn-multi" title="Показывать 3 стрелки или 1 (клик для переключения)">🎯 3</button>
-          <button class="cs-btn-icon" id="cs-btn-vis" title="Скрыть/показать стрелки на доске (H)">👁️</button>
-          <button class="cs-btn-icon" id="cs-btn-min" title="Свернуть/развернуть виджет">—</button>
+        <div class="cs-hud-controls cs-hud-actions">
+          <button type="button" class="cs-btn-icon active" id="cs-btn-multi" title="Показывать 3 стрелки или 1 (клик для переключения)">3x</button>
+          <button type="button" class="cs-btn-icon active" id="cs-btn-vis" title="Скрыть/показать стрелки на доске (H)">👁️</button>
+          <button type="button" class="cs-btn-icon" id="cs-btn-min" title="Свернуть/развернуть виджет">—</button>
         </div>
-      </div>
+      </header>
 
+      <!-- Body -->
       <div class="cs-hud-body" id="cs-hud-body">
-        <div class="cs-persona-row">
-          <span id="cs-persona-badge" class="cs-persona-badge"></span>
-          <select id="cs-persona-select" aria-label="Стиль игры">
-            ${Object.entries(HudPersonas.PERSONAS).map(([id, persona]) => `<option value="${id}">${persona.icon} ${persona.name}</option>`).join('')}
-          </select>
-        </div>
-        <!-- Переключатель цвета игрока -->
-        <div class="cs-color-section">
-          <span class="cs-section-label">Мой цвет:</span>
-          <div class="cs-color-buttons">
-            <button class="cs-color-btn active" data-color="auto" id="cs-col-auto">🔄 Авто</button>
-            <button class="cs-color-btn" data-color="w" id="cs-col-white">⚪ Белые</button>
-            <button class="cs-color-btn" data-color="b" id="cs-col-black">⚫ Черные</button>
+        <!-- Top Toolbar: Persona & Color -->
+        <div class="cs-hud-toolbar">
+          <div class="cs-persona-wrap">
+            <span id="cs-persona-badge" class="cs-persona-badge"></span>
+            <select id="cs-persona-select" aria-label="Стиль игры">
+              ${Object.entries(HudPersonas.PERSONAS).map(([id, persona]) => `<option value="${id}">${persona.icon} ${persona.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="cs-color-switcher" role="group" aria-label="Мой цвет">
+            <button type="button" class="cs-color-btn ${this.currentColorMode === 'auto' ? 'active' : ''}" data-color="auto" id="cs-col-auto" title="Автоопределение цвета">Auto</button>
+            <button type="button" class="cs-color-btn ${this.currentColorMode === 'w' ? 'active' : ''}" data-color="w" id="cs-col-white" title="Играю белыми">W</button>
+            <button type="button" class="cs-color-btn ${this.currentColorMode === 'b' ? 'active' : ''}" data-color="b" id="cs-col-black" title="Играю черными">B</button>
           </div>
         </div>
 
-        <!-- Блок рекомендованного хода -->
-        <div class="cs-move-section">
-          <div class="cs-move-main">
-            <span class="cs-move-badge" id="cs-move-text">—</span>
+        <!-- Hero Move Card -->
+        <div class="cs-hero-move-card cs-move-section">
+          <div class="cs-hero-top">
             <span class="cs-rank-pill" id="cs-rank-pill">Ожидание...</span>
-          </div>
-          <div class="cs-meta-row">
             <span class="cs-eval-text" id="cs-eval-text">Оценка: 0.0</span>
-            <span class="cs-opening-text" id="cs-opening-text"></span>
           </div>
-
-          <div id="cs-move-action" class="cs-move-action" role="status" aria-live="polite">Пробел — выполнить выбранный ход</div>
-          <!-- Список линий анализа MultiPV (Топ 1-3) -->
-          <div class="cs-multipv-block" id="cs-multipv-block">
-            <div class="cs-multipv-list" id="cs-multipv-list">
-              <div class="cs-multipv-empty">Ожидание позиции...</div>
-            </div>
+          <div class="cs-hero-main cs-move-main">
+            <span class="cs-move-badge" id="cs-move-text">—</span>
+            <button type="button" class="cs-btn-reroll" id="cs-btn-reroll" title="Случайно выбрать другой допустимый ход (Re-roll)">🎲</button>
+          </div>
+          <div class="cs-hero-meta cs-meta-row">
+            <span class="cs-opening-text" id="cs-opening-text"></span>
+            <div id="cs-move-action" class="cs-move-action" role="status" aria-live="polite">Пробел — выполнить выбранный ход</div>
           </div>
         </div>
 
-        <!-- Таймер обдумывания хода (Человеческая задержка) -->
+        <!-- Timer / Human Delay Bar -->
         <div class="cs-timer-section">
           <div class="cs-timer-header">
             <span class="cs-timer-label" id="cs-timer-status">⏳ Расчет времени...</span>
             <span class="cs-timer-sec" id="cs-timer-val">0.0s</span>
           </div>
-          <div class="cs-progress-bar-bg">
+          <div class="cs-timer-bar-wrap cs-progress-bar-bg">
             <div class="cs-progress-bar-fill" id="cs-timer-progress"></div>
           </div>
         </div>
 
-        <!-- Контроль точности игры (Live Accuracy) -->
-        <div class="cs-accuracy-section">
-          <div class="cs-accuracy-row">
-            <span class="cs-acc-title">🎯 Точность:</span>
-            <span class="cs-acc-val" id="cs-acc-val">—</span>
-            <span class="cs-acc-badge" id="cs-acc-badge">Норма</span>
+        <!-- MultiPV Candidates List -->
+        <div class="cs-multipv-block" id="cs-multipv-block">
+          <div class="cs-multipv-list" id="cs-multipv-list">
+            <div class="cs-multipv-empty">Ожидание позиции...</div>
           </div>
         </div>
 
-        <!-- Селектор ELO -->
-        <div class="cs-elo-section">
-          <span class="cs-section-label">Рейтинг ELO:</span>
+        <!-- Secondary Controls: Quick ELO & Accuracy -->
+        <div class="cs-hud-subgrid">
           <div class="cs-elo-buttons" id="cs-elo-buttons">
-            <button class="cs-elo-btn" data-elo="1000">1000</button>
-            <button class="cs-elo-btn" data-elo="1400">1400</button>
-            <button class="cs-elo-btn" data-elo="1800">1800</button>
-            <button class="cs-elo-btn" data-elo="2200">2200</button>
-            <button class="cs-elo-btn" data-elo="2600">2600</button>
+            <button type="button" class="cs-elo-btn" data-elo="1000">1000</button>
+            <button type="button" class="cs-elo-btn" data-elo="1400">1400</button>
+            <button type="button" class="cs-elo-btn" data-elo="1800">1800</button>
+            <button type="button" class="cs-elo-btn" data-elo="2200">2200</button>
+            <button type="button" class="cs-elo-btn" data-elo="2600">2600</button>
+          </div>
+          <div class="cs-accuracy-section">
+            <span class="cs-acc-val" id="cs-acc-val">—</span>
+            <span class="cs-acc-badge safe" id="cs-acc-badge">Норма</span>
           </div>
         </div>
 
-        <!-- Кнопка Re-roll -->
-        <div class="cs-controls-row">
-          <button class="cs-btn-reroll" id="cs-btn-reroll" title="Случайно выбрать другой допустимый ход из Топ-3">
-            <span>🎲</span> Перебросить ход (Re-roll)
-          </button>
-        </div>
+        <!-- Game Session Stats -->
+        <div id="cs-game-stats" role="status">Нет завершённых партий</div>
       </div>
     `;
 
@@ -158,6 +158,7 @@ class HudWidget {
       this.setPersona(event.target.value);
       if (this.onPersonaChange) this.onPersonaChange(this.aiPersona);
     });
+
     // Перетаскивание
     const handle = this.container.querySelector('#cs-hud-drag-handle');
     let isDragging = false, startX, startY, initialX, initialY;
@@ -206,6 +207,7 @@ class HudWidget {
     visBtn.addEventListener('click', () => {
       if (this.onToggleOverlay) {
         const isVis = this.onToggleOverlay();
+        visBtn.classList.toggle('active', isVis);
         visBtn.style.opacity = isVis ? '1' : '0.4';
       }
     });
@@ -215,7 +217,7 @@ class HudWidget {
     multiBtn.addEventListener('click', () => {
       this.showMultiArrows = !this.showMultiArrows;
       multiBtn.classList.toggle('active', this.showMultiArrows);
-      multiBtn.textContent = this.showMultiArrows ? '🎯 3' : '🎯 1';
+      multiBtn.textContent = this.showMultiArrows ? '3x' : '1x';
       multiBtn.title = this.showMultiArrows ? 'Показываются 3 стрелки (клик для 1)' : 'Показывается 1 стрелка (клик для 3)';
       if (this.onToggleMulti) {
         this.onToggleMulti(this.showMultiArrows);
@@ -261,6 +263,7 @@ class HudWidget {
   }
 
   updateEloActiveButton() {
+    if (!this.container) return;
     const eloBtns = this.container.querySelectorAll('.cs-elo-btn');
     eloBtns.forEach(btn => {
       const elo = parseInt(btn.dataset.elo, 10);
@@ -268,9 +271,6 @@ class HudWidget {
     });
   }
 
-  /**
-   * Установка бейджа движка (JS или Native Python Bridge)
-   */
   setPersona(value) {
     this.aiPersona = HudPersonas.normalizePersona(value);
     if (!this.container) return;
@@ -283,20 +283,21 @@ class HudWidget {
 
   setEngineSource(source, isFallback = false, metadata = {}) {
     this.engineSource = source;
+    if (!this.container) return;
     const badge = this.container.querySelector('#cs-engine-badge');
     if (!badge) return;
 
     badge.className = 'cs-engine-badge';
     if (source === 'unavailable') {
       badge.classList.add('fallback');
-      badge.textContent = '⚠️ Движок недоступен';
+      badge.textContent = '⚠️ Недоступен';
       badge.title = 'Расчёт не выполнен; нажмите Re-roll для повторного запуска';
     } else if (source === 'book') {
       badge.textContent = '📖 Книга';
       badge.title = 'Ход из дебютной книги';
     } else if (source === 'nnue') {
       badge.classList.add('nnue');
-      badge.textContent = '🧠 NNUE (WASM)';
+      badge.textContent = '🧠 NNUE';
       badge.title = `${metadata.engineName || 'Stockfish 19 Lite'}; ${metadata.nnueNetwork || 'Встроенная NNUE'}${metadata.elapsedMs != null ? `; ${metadata.elapsedMs} мс` : ''}${isFallback ? '; Python Bridge недоступен' : ''}`;
     } else if (source === 'native') {
       badge.classList.add('native');
@@ -313,10 +314,8 @@ class HudWidget {
     }
   }
 
-  /**
-   * Отображение состояния, когда ходит соперник
-   */
   showOpponentThinking(turnColor) {
+    if (!this.container) return;
     const moveTextEl = this.container.querySelector('#cs-move-text');
     const rankPillEl = this.container.querySelector('#cs-rank-pill');
     const evalTextEl = this.container.querySelector('#cs-eval-text');
@@ -342,10 +341,8 @@ class HudWidget {
     }
   }
 
-  /**
-   * Отображение состояния, когда движок рассчитывает позицию
-   */
   showCalculating() {
+    if (!this.container) return;
     const moveTextEl = this.container.querySelector('#cs-move-text');
     const rankPillEl = this.container.querySelector('#cs-rank-pill');
     const evalTextEl = this.container.querySelector('#cs-eval-text');
@@ -383,9 +380,6 @@ class HudWidget {
     }
   }
 
-  /**
-   * Форматирование оценки хода
-   */
   formatScore(score) {
     if (!score) return '+0.0';
     if (score.unit === 'mate') {
@@ -395,10 +389,8 @@ class HudWidget {
     return score.value > 0 ? `+${val}` : `${val}`;
   }
 
-  /**
-   * Обновление списка Top 1–3 линий в HUD
-   */
   updateMultiMoves(lines = [], selectedMoveUci = null, meta = {}) {
+    if (!this.container) return;
     const listEl = this.container.querySelector('#cs-multipv-list');
     if (!listEl) return;
 
@@ -406,7 +398,7 @@ class HudWidget {
       if (meta.isBook && selectedMoveUci) {
         listEl.innerHTML = `
           <div class="cs-multipv-item selected" style="border-left-color: #c084fc;">
-            <div class="cs-mp-rank" style="background: rgba(192, 132, 252, 0.2); color: #c084fc;">📖</div>
+            <div class="cs-mp-rank" style="color: #c084fc;">📖</div>
             <div class="cs-mp-move">${selectedMoveUci.slice(0, 2)} → ${selectedMoveUci.slice(2, 4)}</div>
             <div class="cs-mp-score">Дебют</div>
             <div class="cs-mp-tag">Книга</div>
@@ -449,10 +441,10 @@ class HudWidget {
       const scoreFormatted = this.formatScore(line.score);
 
       item.innerHTML = `
-        <div class="cs-mp-rank rank-${rank}">${rank}</div>
-        <div class="cs-mp-move">${moveFormatted}</div>
-        <div class="cs-mp-score">${scoreFormatted}</div>
-        ${isSelected ? '<div class="cs-mp-tag">★ Рекомендован</div>' : ''}
+        <span class="cs-mp-rank rank-${rank}">#${rank}</span>
+        <span class="cs-mp-move">${moveFormatted}</span>
+        <span class="cs-mp-score">${scoreFormatted}</span>
+        ${isSelected ? '<span class="cs-mp-tag">★ Ход</span>' : ''}
       `;
 
       item.addEventListener('click', () => {
@@ -460,17 +452,19 @@ class HudWidget {
           this.onSelectLine(line.uci, rank);
         }
       });
-      item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); item.click(); } });
+      item.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          item.click();
+        }
+      });
 
       listEl.appendChild(item);
     });
   }
 
-  /**
-   * Обновление информации о главном ходе
-   */
   updateMove(moveData) {
-    if (!moveData) return;
+    if (!moveData || !this.container) return;
     const moveTextEl = this.container.querySelector('#cs-move-text');
     const rankPillEl = this.container.querySelector('#cs-rank-pill');
     const evalTextEl = this.container.querySelector('#cs-eval-text');
@@ -493,14 +487,15 @@ class HudWidget {
     evalTextEl.textContent = `Оценка: ${moveData.scoreText || '+0.0'}`;
     openingTextEl.textContent = moveData.reason || (moveData.openingName ? `📖 ${moveData.openingName}` : '');
   }
+
   updateGameStats(summary, adaptive = false, pending = false, profile = null) {
+    if (!this.container) return;
     let element = this.container.querySelector('#cs-game-stats');
     if (!element) {
       element = document.createElement('div');
       element.id = 'cs-game-stats';
-      element.style.cssText = 'font-size:11px;color:#94a3b8;margin:8px 0;line-height:1.5';
       element.setAttribute('role', 'status');
-      this.container.querySelector('.cs-timer-section').after(element);
+      this.container.querySelector('#cs-hud-body').appendChild(element);
     }
     const n = summary.total || summary.games;
     const rate = summary.games ? summary.metric === 'score' ? `${Math.round(summary.scoreRate * 100)}% очков · ${summary.wins}/${summary.games} побед` : `${summary.wins}/${summary.games} побед (${Math.round(summary.winRate * 100)}%)` : 'нет завершённых партий';
@@ -513,6 +508,7 @@ class HudWidget {
   }
 
   updateTimerProgress({ remainingSec, progressPercent, isReady, reason = 'Обдумывание' }) {
+    if (!this.container) return;
     const statusEl = this.container.querySelector('#cs-timer-status');
     statusEl.title = reason;
     const valEl = this.container.querySelector('#cs-timer-val');
@@ -534,7 +530,7 @@ class HudWidget {
   }
 
   updateAccuracy(accData) {
-    if (!accData) return;
+    if (!accData || !this.container) return;
     const valEl = this.container.querySelector('#cs-acc-val');
     const badgeEl = this.container.querySelector('#cs-acc-badge');
 

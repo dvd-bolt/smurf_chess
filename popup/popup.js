@@ -3,6 +3,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   const eloDisplay = document.getElementById('elo-display');
   const eloHint = document.getElementById('elo-hint');
 
+  const tabButtons = [...document.querySelectorAll('.cs-tab-btn')];
+  const tabPanels = [...document.querySelectorAll('.cs-tab-panel')];
+  const viewport = document.getElementById('cs-panels-viewport');
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = `tab-${btn.dataset.tab}`;
+      tabButtons.forEach(b => b.classList.toggle('active', b === btn));
+      tabPanels.forEach(p => p.classList.toggle('active', p.id === targetId));
+      const panel = document.getElementById(targetId);
+      if (panel && viewport) {
+        viewport.scrollTo({ top: panel.offsetTop - viewport.offsetTop, behavior: 'smooth' });
+      }
+    });
+  });
+
   const toggleBlunder = document.getElementById('toggle-blunder');
   const toggleSnowball = document.getElementById('toggle-snowball');
   const toggleDelay = document.getElementById('toggle-delay');
@@ -106,19 +121,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) chrome.storage.sync.set({ aiPersona: button.dataset.persona });
   }));
   updatePersona('balanced');
-
-  const hints = {
-    800: 'Новичок • Глубина 6 • Частые неточности',
-    1000: 'Новичок • Глубина 6 • Топ 2-3 приоритет',
-    1200: 'Любитель • Глубина 8 • Сбалансированный сноубол',
-    1400: 'Любитель • Глубина 8 • Топ 1-2 приоритет',
-    1600: 'Клубный игрок • Глубина 10 • Топ 1 (50%)',
-    1800: 'Клубный игрок • Глубина 12 • Позиционная стабильность',
-    2000: 'КМС • Глубина 14 • Сильный позиционный расчет',
-    2200: 'Мастер • Глубина 16 • Топ 1 (85%)',
-    2400: 'Мастер • Глубина 16 • Топ 1 (85%)',
-    2600: 'Движок • Глубина 18+ • Максимальная мощность'
-  };
 
   function updateEloDisplay(val) {
     eloDisplay.textContent = `${val} ELO`;

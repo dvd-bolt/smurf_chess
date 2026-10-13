@@ -2,116 +2,232 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chess Sensei Settings</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="popup-container">
-    <header class="header">
-      <div class="logo">
-        <span class="icon">👑</span>
-        <div>
-          <h1>Chess Sensei</h1>
-          <span class="version">v1.4.0 • Human Play</span>
+    <!-- Header -->
+    <header class="cs-header">
+      <div class="cs-brand">
+        <div class="cs-logo-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5M12 3v3M8 6h8M9 9h6l1 5H8l1-5zM9 14l-2 7h10l-2-7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="cs-brand-text">
+          <div class="cs-brand-title">Chess Sensei <span class="cs-version-tag">v1.4.0</span></div>
+          <div class="cs-brand-sub">Smart Assistant &amp; NNUE Analysis</div>
         </div>
       </div>
-      <span class="status-badge" id="status-badge">АКТИВЕН</span>
+      <div id="status-badge" class="cs-badge cs-badge-active" title="Статус инжекции в активную вкладку">АКТИВЕН</div>
     </header>
 
-    <main class="settings-body">
-      <!-- Настройка ELO -->
-      <section class="section">
-        <div class="section-title-row">
-          <label for="elo-range">Уровень ELO</label>
-          <span class="elo-val" id="elo-display">1500 ELO</span>
+    <!-- Tab navigation -->
+    <nav class="cs-tabs" role="tablist">
+      <button type="button" class="cs-tab-btn active" data-tab="play">🎮 Игра &amp; ELO</button>
+      <button type="button" class="cs-tab-btn" data-tab="automation">⚙️ Автоматика</button>
+      <button type="button" class="cs-tab-btn" data-tab="adaptive">📈 Адаптация</button>
+    </nav>
+
+    <main class="cs-panels-viewport" id="cs-panels-viewport">
+      <!-- TAB 1: PLAY & ELO -->
+      <section class="cs-tab-panel active" id="tab-play">
+        <!-- Play Mode card -->
+        <div class="cs-card">
+          <div class="cs-field-group">
+            <div class="cs-field-header">
+              <label for="play-mode" class="cs-label">Модель игры (Play Mode)</label>
+              <span class="cs-hint-tooltip" title="Рейтинговый режим ограничивает силу Stockfish (ориентир 55% очков). Человеческий — имитирует восприятие и планы. Сильный — без ограничений ELO.">?</span>
+            </div>
+            <div class="cs-select-wrap">
+              <select id="play-mode" class="cs-select">
+                <option value="rated" selected>Игра по рейтингу ELO (800–2600)</option>
+                <option value="strict">Сильная игра — без ограничения ELO</option>
+                <option value="human">Человеческая игра — экспериментальная</option>
+              </select>
+            </div>
+          </div>
         </div>
-        <input type="range" id="elo-range" min="800" max="2600" step="100" value="1500">
-        <div class="elo-hint" id="elo-hint">Ориентир: 55% очков против равного уровня</div>
-      </section>
 
-      <section class="section persona-section" aria-labelledby="persona-title">
-        <div class="section-title-row"><span id="persona-title">Стиль игры</span><span class="persona-note">4 персоны</span></div>
-        <div class="persona-grid" role="group" aria-label="Выбор шахматной персоны">
-          <button type="button" class="persona-button" data-persona="balanced" aria-pressed="true">⚡ Баланс</button>
-          <button type="button" class="persona-button" data-persona="tal" aria-pressed="false">⚔️ Таль</button>
-          <button type="button" class="persona-button" data-persona="karpov" aria-pressed="false">🛡️ Карпов</button>
-          <button type="button" class="persona-button" data-persona="capablanca" aria-pressed="false">👑 Капабланка</button>
+        <!-- ELO Slider card -->
+        <div class="cs-card">
+          <div class="cs-card-header-flex">
+            <label for="elo-range" class="cs-label">Уровень силы (ELO)</label>
+            <div class="cs-elo-badge"><span id="elo-display">1500 ELO</span></div>
+          </div>
+          <div class="cs-slider-container">
+            <input type="range" id="elo-range" min="800" max="2600" step="100" value="1500" class="cs-slider">
+            <div class="cs-slider-ticks">
+              <span>800</span>
+              <span>1200</span>
+              <span>1600</span>
+              <span>2000</span>
+              <span>2600</span>
+            </div>
+          </div>
+          <div id="elo-hint" class="cs-subhint">Ориентир: 55% очков против равного уровня</div>
         </div>
-        <p id="persona-description" class="persona-description" aria-live="polite"></p>
+
+        <!-- AI Personas card -->
+        <div class="cs-card" aria-labelledby="persona-title">
+          <div class="cs-field-header">
+            <span id="persona-title" class="cs-label">Стиль игры (AI Persona)</span>
+            <span class="cs-hint-tooltip" title="Персоны действуют в режимах Сильной и Человеческой игры. В рейтинговом режиме блокируются.">?</span>
+          </div>
+          <div class="cs-persona-grid" role="group" aria-label="Выбор шахматной персоны">
+            <button type="button" class="cs-persona-btn persona-button active" data-persona="balanced" aria-pressed="true">
+              <span class="cs-p-icon">⚡</span>
+              <span class="cs-p-name">Баланс</span>
+            </button>
+            <button type="button" class="cs-persona-btn persona-button" data-persona="tal" aria-pressed="false">
+              <span class="cs-p-icon">⚔️</span>
+              <span class="cs-p-name">Таль</span>
+            </button>
+            <button type="button" class="cs-persona-btn persona-button" data-persona="karpov" aria-pressed="false">
+              <span class="cs-p-icon">🛡️</span>
+              <span class="cs-p-name">Карпов</span>
+            </button>
+            <button type="button" class="cs-persona-btn persona-button" data-persona="capablanca" aria-pressed="false">
+              <span class="cs-p-icon">👑</span>
+              <span class="cs-p-name">Капабланка</span>
+            </button>
+          </div>
+          <p id="persona-description" class="cs-subhint" aria-live="polite"></p>
+        </div>
       </section>
 
-      <!-- Тогглы режимов -->
-      <section class="section">
-        <label for="play-mode">Модель игры</label>
-        <select id="play-mode" class="human-select">
-          <option value="rated" selected>Игра по рейтингу ELO</option>
-          <option value="strict">Сильная игра — без ограничения ELO</option>
-          <option value="human">Человеческая игра — экспериментальная</option>
-        </select>
-        <p class="persona-description">Рейтинговый режим ограничивает силу Stockfish. Ориентир при равном уровне — 55% очков с учётом ничьих. Ниже 1320 используется дополнительная модель ошибок; рейтинг предварительный. Персоны действуют в остальных режимах.</p>
-        <label class="toggle-row">
-          <span>📈 Адаптивная сила</span>
-          <input type="checkbox" id="toggle-adaptive" aria-describedby="adaptive-hint">
-          <span class="switch"></span>
-        </label>
-        <label for="target-win-rate">Цель адаптации</label>
-        <select id="target-win-rate" class="human-select">
-          <option value="0.6">60%</option>
-          <option value="0.5">50%</option>
-          <option value="0.55" selected>55%</option>
-          <option value="0.65">65%</option>
-          <option value="0.7">70%</option>
-        </select>
-        <p id="adaptive-hint" class="persona-description">В рейтинговом режиме учитывает очки: победа 1, ничья ½, поражение 0. В человеческом — долю побед. Настраивает силу между партиями; цель не гарантируется.</p>
-        <label for="stats-group">Статистика соперников</label>
-        <select id="stats-group" class="human-select" aria-label="Группа партий"></select>
-        <p id="human-statistics" class="persona-description" role="status">Нет завершённых партий</p>
-        <button type="button" id="reset-human-stats" class="btn-secondary">Сбросить статистику</button>
+      <!-- TAB 2: AUTOMATION -->
+      <section class="cs-tab-panel" id="tab-automation">
+        <div class="cs-card cs-toggles-card">
+          <!-- Auto Play -->
+          <label class="toggle-row">
+            <div class="toggle-meta">
+              <span class="toggle-title">🤖 Автоматически выполнять ходы</span>
+              <span id="auto-play-hint" class="toggle-desc">Играет выбранным ходом после обдумывания</span>
+            </div>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-auto-play" aria-describedby="auto-play-hint">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <!-- Delay -->
+          <label class="toggle-row">
+            <div class="toggle-meta">
+              <span class="toggle-title">⏱️ Задержка по часам (Human Delay)</span>
+              <span class="toggle-desc">Человеческое распределение времени партии</span>
+            </div>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-delay" checked>
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <!-- Blunder Filter (checked disabled) -->
+          <label class="toggle-row">
+            <div class="toggle-meta">
+              <span class="toggle-title"><span id="safety-label">🛡️ Защита от зевов — всегда включена</span></span>
+              <span class="toggle-desc">Фильтр грубых ошибок по силе профиля</span>
+            </div>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-blunder" checked disabled>
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <!-- Snowball -->
+          <label class="toggle-row">
+            <div class="toggle-meta">
+              <span class="toggle-title">❄️ Стратегия «Сноубол» (Smooth Play)</span>
+              <span class="toggle-desc">Плавное наращивание позиционного перевеса</span>
+            </div>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-snowball" checked>
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <!-- Python Bridge -->
+          <label class="toggle-row">
+            <div class="toggle-meta">
+              <span class="toggle-title">⚡ Локальный Stockfish (Python Bridge)</span>
+              <span class="toggle-desc">Подключение к внешнему процессу движка</span>
+            </div>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-bridge">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+        </div>
+
+        <!-- Lichess Input Card -->
+        <div class="cs-card">
+          <div class="cs-action-row">
+            <div class="cs-action-meta">
+              <span class="cs-label">Ввод автоходов Lichess</span>
+              <span id="lichess-input-hint" class="cs-subhint" role="status">Требуется разрешение «debugger» для Trusted Input</span>
+            </div>
+            <button type="button" id="btn-lichess-input" class="cs-btn cs-btn-secondary" aria-describedby="lichess-input-hint">Разрешить автоходы Lichess</button>
+          </div>
+        </div>
       </section>
-      <section class="section toggles-section">
-        <label class="toggle-row">
-          <span>🤖 Автоматически выполнять ходы</span>
-          <input type="checkbox" id="toggle-auto-play" aria-describedby="auto-play-hint">
-          <span class="switch"></span>
-        </label>
-        <p class="persona-description" id="auto-play-hint">Играет выбранным ходом после обдумывания. Без задержки — сразу после расчёта.</p>
-        <button type="button" id="btn-lichess-input" class="btn-secondary" aria-describedby="lichess-input-hint">Разрешить автоходы Lichess</button>
-        <p class="persona-description" id="lichess-input-hint" role="status">Для Lichess нужен ввод через браузер. Кнопка запросит дополнительное разрешение «debugger»; браузер может показывать уведомление об отладке.</p>
-        <label class="toggle-row">
-          <span id="safety-label">🛡️ Защита от зевов — всегда включена</span>
-          <input type="checkbox" id="toggle-blunder" checked disabled>
-          <span class="switch"></span>
-        </label>
 
-        <label class="toggle-row">
-          <span>❄️ Стратегия «Сноубол» (Smooth Play)</span>
-          <input type="checkbox" id="toggle-snowball" checked>
-          <span class="switch"></span>
-        </label>
+      <!-- TAB 3: ADAPTIVE & STATS -->
+      <section class="cs-tab-panel" id="tab-adaptive">
+        <div class="cs-card">
+          <label class="toggle-row">
+            <div class="toggle-meta">
+              <span class="toggle-title">📈 Адаптивная сила (Auto-Tuning)</span>
+              <span class="toggle-desc">Авто-коррекция силы между партиями</span>
+            </div>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-adaptive" aria-describedby="adaptive-hint">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
 
-        <label class="toggle-row">
-          <span>⏱️ Задержка по часам (Human Delay)</span>
-          <input type="checkbox" id="toggle-delay" checked>
-          <span class="switch"></span>
-        </label>
+          <div class="cs-field-group cs-mt-12">
+            <div class="cs-field-header">
+              <label for="target-win-rate" class="cs-label">Целевая доля очков</label>
+            </div>
+            <div class="cs-select-wrap">
+              <select id="target-win-rate" class="cs-select">
+                <option value="0.5">50%</option>
+                <option value="0.55" selected>55%</option>
+                <option value="0.6">60%</option>
+                <option value="0.65">65%</option>
+                <option value="0.7">70%</option>
+              </select>
+            </div>
+            <p id="adaptive-hint" class="cs-subhint cs-mt-4">Настраивает силу между партиями; цель не гарантируется.</p>
+          </div>
+        </div>
 
-        <label class="toggle-row">
-          <span>⚡ Локальный Stockfish (Python Bridge)</span>
-          <input type="checkbox" id="toggle-bridge">
-          <span class="switch"></span>
-        </label>
-      </section>
-
-      <!-- Быстрые действия -->
-      <section class="actions-section">
-        <button class="btn-primary" id="btn-open-test">
-          ♟️ Открыть тестовую доску
-        </button>
+        <!-- Statistics Card -->
+        <div class="cs-card">
+          <div class="cs-card-header-flex">
+            <label for="stats-group" class="cs-label">Статистика соперников</label>
+            <button type="button" id="reset-human-stats" class="cs-btn-text-danger" title="Сбросить статистику">Сбросить статистику</button>
+          </div>
+          <div class="cs-select-wrap cs-mt-8">
+            <select id="stats-group" class="cs-select cs-select-sm" aria-label="Группа партий"></select>
+          </div>
+          <p id="human-statistics" class="cs-stats-display cs-mt-8" role="status">Нет завершённых партий</p>
+        </div>
       </section>
     </main>
 
-    <footer class="footer">
-      Работает на Chess.com, Lichess и локальных досках.
+    <!-- Footer actions -->
+    <footer class="cs-footer">
+      <button type="button" id="btn-open-test" class="cs-btn cs-btn-primary cs-btn-block">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M3 9h18M9 21V9"/>
+        </svg>
+        <span>♟️ Открыть тестовую доску</span>
+      </button>
     </footer>
   </div>
 
